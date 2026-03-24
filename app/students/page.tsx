@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
 import { 
   LayoutDashboard, PlusCircle, Users, LogOut, Trash2, Edit3, 
@@ -255,17 +255,6 @@ export default function StudentsPage() {
           </div>
         </div>
       </main>
-
-      <style jsx>{`
-        .directory-input {
-          width: 100%; border: 1px solid #f1f5f9; background: #f8fafc; 
-          padding: 0.875rem; border-radius: 1rem; outline: none; 
-          font-weight: 700; color: #1e293b; transition: all 0.2s;
-        }
-        .directory-input:focus {
-          border-color: #14B8A6; ring: 2px; ring-color: #14B8A6; background: white;
-        }
-      `}</style>
     </div>
   );
 }

@@ -1,6 +1,6 @@
 'use client'
 import { useState } from 'react';
-import { supabase } from '@/lib/supabase';
+import { supabase } from '../../lib/supabase';
 import { Activity, CheckCircle2, AlertCircle, Loader2 } from 'lucide-react';
 
 export default function StudentKiosk() {
@@ -195,12 +195,6 @@ export default function StudentKiosk() {
           </form>
         )}
       </div>
-
-      <style jsx>{`
-        .kiosk-label { display: block; font-size: 10px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.15em; color: #94a3b8; margin-bottom: 0.5rem; margin-left: 0.25rem; }
-        .kiosk-input { width: 100%; background: #0F172A; border: 1px solid #334155; padding: 1.1rem; border-radius: 1.25rem; font-weight: 700; color: white; outline: none; transition: all 0.2s; }
-        .kiosk-input:focus { border-color: #14B8A6; box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.1); background: #1e293b; }
-      `}</style>
     </div>
   );
 }

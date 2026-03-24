@@ -24,3 +24,31 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+
+/* --- ADDED CUSTOM KIOSK STYLES HERE --- */
+
+.kiosk-label {
+  display: block;
+  font-size: 10px;
+  font-weight: 900;
+  text-transform: uppercase;
+  letter-spacing: 0.15em;
+  color: #64748b; /* slate-500 */
+  margin-bottom: 0.5rem;
+}
+
+.kiosk-input {
+  width: 100%;
+  background: #0F172A; /* dark slate */
+  color: white;
+  border: 1px solid #334155;
+  padding: 1.1rem;
+  border-radius: 1.25rem;
+  outline: none;
+  transition: all 0.2s;
+}
+
+.kiosk-input:focus {
+  border-color: #14B8A6; /* teal-500 */
+  box-shadow: 0 0 0 4px rgba(20, 184, 166, 0.15);
+}
