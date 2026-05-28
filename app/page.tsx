@@ -17,9 +17,7 @@ import {
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
 
-// =========================
-// TYPES
-// =========================
+
 interface Student {
   name: string;
   grade_level: string;
@@ -123,9 +121,7 @@ export default function ClinicDashboard() {
 
   }, []);
 
-  // =========================
-  // AUTH CHECK
-  // =========================
+  
   useEffect(() => {
 
     const checkUser = async () => {
@@ -149,9 +145,7 @@ export default function ClinicDashboard() {
 
   }, [router, fetchData]);
 
-  // =========================
-  // REALTIME
-  // =========================
+
   useEffect(() => {
 
     const channel = supabase
@@ -177,9 +171,7 @@ export default function ClinicDashboard() {
 
   }, [fetchData]);
 
-  // =========================
-  // HELPERS
-  // =========================
+
   const formatGrade = (grade: string) => {
 
     if (!grade) return 'N/A';
@@ -189,7 +181,6 @@ export default function ClinicDashboard() {
       : `Grade ${grade}`;
   };
 
-  // LOGIN TIME FORMATTER
   const formatLoginTime = (visit: Visit) => {
 
     return (
@@ -279,9 +270,7 @@ export default function ClinicDashboard() {
     }
   );
 
-  // =========================
-  // LOADING
-  // =========================
+
   if (loading) {
 
     return (
@@ -291,9 +280,7 @@ export default function ClinicDashboard() {
     );
   }
 
-  // =========================
-  // UI
-  // =========================
+
   return (
 
     <div className="min-h-screen bg-slate-50 p-10">
