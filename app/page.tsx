@@ -1,6 +1,6 @@
-'use client'
+'use client';
 
-import { useState, useEffect, useCallback, use } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useRouter } from 'next/navigation';
 
@@ -184,43 +184,12 @@ export default function ClinicDashboard() {
       : `Grade ${grade}`;
   };
 
-  // =========================
-  // FORMAT LOGIN TIME
-  // =========================
   const formatLoginTime = (visit: Visit) => {
 
-    if (visit.logged_in_at) {
+    const date =
+      visit.logged_in_at || visit.visit_time;
 
-      return visit.logged_in_at;
-
-    }
-
-    if (!visit.visit_time) {
-
-      return 'No Time Recorded';
-
-    }
-
-    return new Date(visit.visit_time)
-      .toLocaleString('en-PH', {
-
-        timeZone: 'Asia/Manila',
-
-        year: 'numeric',
-
-        month: 'long',
-
-        day: 'numeric',
-
-        hour: 'numeric',
-
-        minute: '2-digit',
-
-        second: '2-digit',
-
-        hour12: true
-
-      });
+    return new Date(date).toLocaleString();
   };
 
   // =========================
@@ -260,7 +229,7 @@ export default function ClinicDashboard() {
 
       body: studentHistory.map(v => [
 
-        v.logged_in_at || formatLoginTime(v),
+        formatLoginTime(v),
 
         v.subject_at_time,
 
@@ -387,7 +356,9 @@ export default function ClinicDashboard() {
 
       </div>
 
+      {/* ========================= */}
       {/* STUDENTS TABLE */}
+      {/* ========================= */}
       <div className="bg-white rounded-3xl overflow-hidden shadow-xl border mb-10">
 
         <div className="px-6 py-5 border-b bg-slate-100">
@@ -469,19 +440,11 @@ export default function ClinicDashboard() {
 
                 <td className="px-6 py-5">
 
-                  <div className="flex flex-col">
+                  <div className="flex items-center gap-2 text-teal-600 font-bold text-sm">
 
-                    <div className="flex items-center gap-2 text-teal-600 font-black text-sm">
+                    <Clock size={15} />
 
-                      <Clock size={15} />
-
-                      {formatLoginTime(v)}
-
-                    </div>
-
-                    <p className="text-[11px] text-slate-400 font-bold uppercase mt-1">
-                      Kiosk Login Record
-                    </p>
+                    {formatLoginTime(v)}
 
                   </div>
 
@@ -558,7 +521,9 @@ export default function ClinicDashboard() {
 
       </div>
 
+      {/* ========================= */}
       {/* EMPLOYEES TABLE */}
+      {/* ========================= */}
       <div className="bg-white rounded-3xl overflow-hidden shadow-xl border">
 
         <div className="px-6 py-5 border-b bg-slate-100">
@@ -637,19 +602,11 @@ export default function ClinicDashboard() {
 
                 <td className="px-6 py-5">
 
-                  <div className="flex flex-col">
+                  <div className="flex items-center gap-2 text-teal-600 font-bold text-sm">
 
-                    <div className="flex items-center gap-2 text-teal-600 font-black text-sm">
+                    <Clock size={15} />
 
-                      <Clock size={15} />
-
-                      {formatLoginTime(v)}
-
-                    </div>
-
-                    <p className="text-[11px] text-slate-400 font-bold uppercase mt-1">
-                      Kiosk Login Record
-                    </p>
+                    {formatLoginTime(v)}
 
                   </div>
 
@@ -707,4 +664,3 @@ export default function ClinicDashboard() {
     </div>
   );
 }
-
