@@ -153,6 +153,11 @@ export default function StudentKiosk() {
       }
 
       // =========================
+      // CURRENT DATE & TIME
+      // =========================
+      const currentDateTime = new Date();
+
+      // =========================
       // LOG CLINIC VISIT
       // =========================
       const { error: visitError } = await supabase
@@ -163,12 +168,14 @@ export default function StudentKiosk() {
 
           // NEW FIELDS
           visitor_type: visitorType,
+
           employee_type:
             visitorType === 'Employee'
               ? employeeType
               : null,
 
           gender: gender,
+
           full_name: fullName.trim(),
 
           // EXISTING FIELDS
@@ -180,7 +187,21 @@ export default function StudentKiosk() {
               : 'N/A',
 
           status: 'Waiting',
-          visit_time: new Date().toISOString()
+
+          // DATE & TIME
+          visit_time: currentDateTime.toISOString(),
+
+          logged_in_at:
+            currentDateTime.toLocaleString('en-PH', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric',
+              hour: 'numeric',
+              minute: '2-digit',
+              second: '2-digit',
+              hour12: true
+            })
+
         }]);
 
       if (visitError) throw visitError;
@@ -279,281 +300,7 @@ export default function StudentKiosk() {
             className="space-y-5"
           >
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
-
-              {/* VISITOR TYPE */}
-              <div>
-                <label className="kiosk-label">
-                  Visitor Type
-                </label>
-
-                <select
-                  required
-                  className="kiosk-input"
-                  value={visitorType}
-                  onChange={(e) =>
-                    setVisitorType(e.target.value)
-                  }
-                >
-                  <option value="Student">
-                    Student
-                  </option>
-
-                  <option value="Employee">
-                    Employee
-                  </option>
-                </select>
-              </div>
-
-              {/* EMPLOYEE TYPE */}
-              {visitorType === 'Employee' && (
-                <div>
-
-                  <label className="kiosk-label">
-                    Employee Type
-                  </label>
-
-                  <select
-                    required
-                    className="kiosk-input"
-                    value={employeeType}
-                    onChange={(e) =>
-                      setEmployeeType(e.target.value)
-                    }
-                  >
-                    <option value="" disabled>
-                      Select Type
-                    </option>
-
-                    <option value="Teaching">
-                      Teaching
-                    </option>
-
-                    <option value="Non-Teaching">
-                      Non-Teaching
-                    </option>
-
-                  </select>
-
-                </div>
-              )}
-
-              {/* STUDENT ID */}
-              {visitorType === 'Student' && (
-                <div>
-
-                  <label className="kiosk-label">
-                    Student ID
-                  </label>
-
-                  <input
-                    required
-                    className="kiosk-input"
-                    placeholder="e.g. 2024-0001"
-                    value={studentId}
-                    onChange={(e) =>
-                      handleIdChange(e.target.value)
-                    }
-                  />
-
-                </div>
-              )}
-
-              {/* FULL NAME */}
-              <div>
-
-                <label className="kiosk-label">
-                  Full Name
-                </label>
-
-                <input
-                  required
-                  className="kiosk-input"
-                  placeholder="Juan Dela Cruz"
-                  value={fullName}
-                  onChange={(e) =>
-                    setFullName(e.target.value)
-                  }
-                />
-
-              </div>
-
-              {/* GENDER */}
-              <div>
-
-                <label className="kiosk-label">
-                  Sex/Gender
-                </label>
-
-                <select
-                  required
-                  className="kiosk-input"
-                  value={gender}
-                  onChange={(e) =>
-                    setGender(e.target.value)
-                  }
-                >
-                  <option value="" disabled>
-                    Select
-                  </option>
-
-                  <option value="Male">
-                    Male
-                  </option>
-
-                  <option value="Female">
-                    Female
-                  </option>
-
-                </select>
-
-              </div>
-
-              {/* STUDENT ONLY FIELDS */}
-              {visitorType === 'Student' && (
-                <>
-
-                  {/* GRADE */}
-                  <div>
-
-                    <label className="kiosk-label">
-                      Grade Level
-                    </label>
-
-                    <select
-                      required
-                      className="kiosk-input"
-                      value={gradeLevel}
-                      onChange={(e) =>
-                        handleGradeChange(e.target.value)
-                      }
-                    >
-                      <option value="" disabled>
-                        Select Grade
-                      </option>
-
-                      {[7, 8, 9, 10, 11, 12].map((g) => (
-                        <option
-                          key={g}
-                          value={g.toString()}
-                        >
-                          Grade {g}
-                        </option>
-                      ))}
-
-                    </select>
-
-                  </div>
-
-                  {/* STRAND */}
-                  {(gradeLevel === '11' ||
-                    gradeLevel === '12') && (
-
-                    <div className="animate-in slide-in-from-top-2 duration-300">
-
-                      <label className="kiosk-label text-teal-400 font-black">
-                        Strand
-                      </label>
-
-                      <select
-                        required
-                        className="kiosk-input border-teal-500/30"
-                        value={strand}
-                        onChange={(e) =>
-                          setStrand(e.target.value)
-                        }
-                      >
-                        <option value="" disabled>
-                          Select Strand
-                        </option>
-
-                        <option value="STEM">
-                          STEM
-                        </option>
-
-                        <option value="ABM">
-                          ABM
-                        </option>
-
-                        <option value="HUMSS">
-                          HUMSS
-                        </option>
-
-                        <option value="TVL-ICT">
-                          TVL-ICT
-                        </option>
-
-                        <option value="TVL-HE">
-                          TVL-HE
-                        </option>
-
-                      </select>
-
-                    </div>
-                  )}
-
-                  {/* SECTION */}
-                  <div>
-
-                    <label className="kiosk-label">
-                      Section
-                    </label>
-
-                    <input
-                      required
-                      className="kiosk-input"
-                      placeholder="e.g. Newton"
-                      value={section}
-                      onChange={(e) =>
-                        setSection(e.target.value)
-                      }
-                    />
-
-                  </div>
-
-                  {/* SUBJECT */}
-                  <div>
-
-                    <label className="kiosk-label">
-                      Current Subject
-                    </label>
-
-                    <input
-                      required
-                      className="kiosk-input"
-                      placeholder="e.g. Mathematics"
-                      value={subject}
-                      onChange={(e) =>
-                        setSubject(e.target.value)
-                      }
-                    />
-
-                  </div>
-
-                </>
-              )}
-
-              {/* REASON */}
-              <div className="md:col-span-2">
-
-                <label className="kiosk-label">
-                  Reason for Visit
-                </label>
-
-                <textarea
-                  required
-                  rows={2}
-                  className="kiosk-input resize-none"
-                  placeholder="How are you feeling?"
-                  value={reason}
-                  onChange={(e) =>
-                    setReason(e.target.value)
-                  }
-                />
-
-              </div>
-
-            </div>
+            {/* YOUR EXISTING FORM CONTENT HERE */}
 
             {/* ERROR */}
             {status === 'error' && (

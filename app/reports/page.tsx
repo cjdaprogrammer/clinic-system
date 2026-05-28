@@ -3,22 +3,40 @@
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
-import { 
-  LayoutDashboard, PlusCircle, Users, LogOut, 
-  Activity, Printer, RefreshCcw, FileText, 
-  Search, TrendingUp, BarChart3,
-  AlertTriangle, Calendar, Clock,
-  Pill, Droplets, Scale, HeartPulse
-} from 'lucide-react'; 
+import {
+  LayoutDashboard,
+  PlusCircle,
+  Users,
+  LogOut,
+  Activity,
+  Printer,
+  FileText,
+  TrendingUp,
+  AlertTriangle,
+  Pill,
+  Droplets,
+  Scale,
+  HeartPulse,
+  Briefcase,
+  UserSquare2
+} from 'lucide-react';
 
 import jsPDF from 'jspdf';
 import autoTable from 'jspdf-autotable';
-import { 
-  BarChart, Bar, XAxis, YAxis, 
-  ResponsiveContainer, Cell, CartesianGrid 
+
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  ResponsiveContainer,
+  CartesianGrid,
+  Tooltip
 } from 'recharts';
 
-// --- TYPES ---
+// =====================
+// TYPES
+// =====================
 interface Visit {
   id: string;
   visit_time: string;
@@ -26,7 +44,6 @@ interface Visit {
   status: string;
   subject_at_time: string;
 
-  // NEW FIELDS
   temperature?: string;
   blood_pressure?: string;
   oxygen_saturation?: string;
@@ -35,30 +52,36 @@ interface Visit {
   herbal_given?: string;
   other_intervention?: string;
 
-  students: {
+  // EMPLOYEE
+  visitor_type?: string;
+  full_name?: string;
+  employee_type?: string;
+
+  students?: {
     name: string;
     grade_level: string;
     strand?: string;
     section?: string;
-  }
+  };
 }
 
 export default function ReportsPage() {
+
   const router = useRouter();
 
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // --- FILTER STATES ---
-  const [filterSubject, setFilterSubject] = useState('All');
-  const [filterStatus, setFilterStatus] = useState('All');
-  const [filterStartDate, setFilterStartDate] = useState('');
-  const [filterEndDate, setFilterEndDate] = useState('');
-  const [filterSearch, setFilterSearch] = useState('');
-
+  // =====================
+  // AUTH
+  // =====================
   useEffect(() => {
+
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
+
+      const {
+        data: { session }
+      } = await supabase.auth.getSession();
 
       if (!session) {
         router.push('/login');
@@ -68,9 +91,14 @@ export default function ReportsPage() {
     };
 
     checkUser();
+
   }, [router]);
 
+  // =====================
+  // FETCH
+  // =====================
   async function fetchAllData() {
+
     setLoading(true);
 
     const { data } = await supabase
@@ -84,274 +112,189 @@ export default function ReportsPage() {
           section
         )
       `)
-      .order('visit_time', { ascending: false });
+      .order('visit_time', {
+        ascending: false
+      });
 
-    setVisits(data || []);
+    setVisits((data as any) || []);
+
     setLoading(false);
   }
 
-  // RESET FILTERS
-  const resetFilters = () => {
-    setFilterSubject('All');
-    setFilterStatus('All');
-    setFilterStartDate('');
-    setFilterEndDate('');
-    setFilterSearch('');
-  };
+  // =====================
+  // ANALYTICS
+  // =====================
 
-  // SUBJECT ANALYTICS
+  // MOST SUBJECTS
   const subjectAnalytics = useMemo(() => {
+
     const counts: Record<string, number> = {};
 
     visits.forEach(v => {
-      const sub = v.subject_at_time || 'General';
-      counts[sub] = (counts[sub] || 0) + 1;
+
+      const subject =
+        v.subject_at_time || 'Unknown';
+
+      counts[subject] =
+        (counts[subject] || 0) + 1;
     });
 
     return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({
+        name,
+        value
+      }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
+
   }, [visits]);
 
-  // REASON ANALYTICS
+  // MOST REASONS
   const reasonAnalytics = useMemo(() => {
+
     const counts: Record<string, number> = {};
 
     visits.forEach(v => {
-      const reason = v.reason?.trim() || 'Unspecified';
-      counts[reason] = (counts[reason] || 0) + 1;
+
+      const reason =
+        v.reason || 'Unknown';
+
+      counts[reason] =
+        (counts[reason] || 0) + 1;
     });
 
     return Object.entries(counts)
-      .map(([name, value]) => ({ name, value }))
+      .map(([name, value]) => ({
+        name,
+        value
+      }))
       .sort((a, b) => b.value - a.value)
-      .slice(0, 5);
+      .slice(0, 6);
+
   }, [visits]);
 
-  // FILTERED DATA
-  const filteredData = useMemo(() => {
-    return visits.filter((v) => {
+  // STUDENTS ONLY
+  const studentVisits = useMemo(() => {
 
-      const vDate = new Date(v.visit_time);
-      vDate.setHours(0, 0, 0, 0);
+    return visits.filter(
+      v => v.visitor_type !== 'Employee'
+    );
 
-      const matchSubject =
-        filterSubject === 'All' ||
-        v.subject_at_time === filterSubject;
+  }, [visits]);
 
-      const matchStatus =
-        filterStatus === 'All' ||
-        v.status === filterStatus;
+  // EMPLOYEES ONLY
+  const employeeVisits = useMemo(() => {
 
-      const matchSearch =
-        filterSearch === '' ||
-        v.students?.name?.toLowerCase().includes(filterSearch.toLowerCase()) ||
-        v.reason?.toLowerCase().includes(filterSearch.toLowerCase()) ||
-        v.students?.strand?.toLowerCase().includes(filterSearch.toLowerCase());
+    return visits.filter(
+      v => v.visitor_type === 'Employee'
+    );
 
-      let matchDateRange = true;
+  }, [visits]);
 
-      if (filterStartDate) {
-        const start = new Date(filterStartDate);
-        start.setHours(0,0,0,0);
-
-        if (vDate < start) {
-          matchDateRange = false;
-        }
-      }
-
-      if (filterEndDate) {
-        const end = new Date(filterEndDate);
-        end.setHours(0,0,0,0);
-
-        if (vDate > end) {
-          matchDateRange = false;
-        }
-      }
-
-      return (
-        matchSubject &&
-        matchStatus &&
-        matchSearch &&
-        matchDateRange
-      );
-    });
-  }, [
-    visits,
-    filterSubject,
-    filterStatus,
-    filterSearch,
-    filterStartDate,
-    filterEndDate
-  ]);
-
+  // =====================
   // PDF EXPORT
-  const exportFormalPDF = (orientation: 'p' | 'l' = 'l') => {
+  // =====================
+  const exportFormalPDF = () => {
 
     const doc = new jsPDF({
-      orientation: orientation,
-      unit: 'mm',
-      format: 'a4'
+      orientation: 'landscape'
     });
 
-    const pageWidth = doc.internal.pageSize.getWidth();
-
-    // HEADER
-    doc.setFontSize(16);
-    doc.setTextColor(15, 23, 42);
+    doc.setFontSize(18);
 
     doc.text(
-      "QUEZON NATIONAL HIGH SCHOOL",
-      pageWidth / 2,
-      15,
-      { align: 'center' }
-    );
-
-    doc.setFontSize(10);
-
-    doc.text(
-      "SCHOOL HEALTH AND CLINIC SERVICES - OFFICIAL LOG",
-      pageWidth / 2,
-      21,
-      { align: 'center' }
-    );
-
-    doc.setDrawColor(20, 184, 166);
-    doc.setLineWidth(0.5);
-
-    doc.line(15, 25, pageWidth - 15, 25);
-
-    doc.setFontSize(8);
-    doc.setTextColor(100);
-
-    doc.text(
-      `Generated: ${new Date().toLocaleString()}`,
-      pageWidth - 15,
-      31,
-      { align: 'right' }
+      'QNHS CLINIC REPORT',
+      14,
+      20
     );
 
     autoTable(doc, {
-      startY: 35,
+
+      startY: 30,
 
       head: [[
-        'Date/Time',
-        'Student',
-        'Grade',
+        'Visitor',
+        'Type',
         'Subject',
+        'Reason',
         'Vitals',
         'Medicine',
-        'Intervention',
-        'Reason',
-        'Status'
+        'Status',
+        'Date'
       ]],
 
-      body: filteredData.map(v => [
+      body: visits.map(v => [
 
-        new Date(v.visit_time).toLocaleString([], {
-          month: 'short',
-          day: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit'
-        }),
+        v.visitor_type === 'Employee'
+          ? v.full_name
+          : v.students?.name,
 
-        v.students?.name?.toUpperCase(),
+        v.visitor_type === 'Employee'
+          ? v.employee_type
+          : 'Student',
 
-        v.students?.strand
-          ? `G${v.students?.grade_level}-${v.students?.strand}`
-          : `G${v.students?.grade_level}`,
+        v.subject_at_time || 'N/A',
 
-        v.subject_at_time,
+        v.reason,
 
         `
-T:${v.temperature || '--'}°C
+T:${v.temperature || '--'}
 BP:${v.blood_pressure || '--'}
-SpO2:${v.oxygen_saturation || '--'}%
-W:${v.weight || '--'}kg
+SpO2:${v.oxygen_saturation || '--'}
         `,
 
         v.medicine_given || 'None',
 
-        `
-Herbal: ${v.herbal_given || 'None'}
-Other: ${v.other_intervention || 'None'}
-        `,
+        v.status,
 
-        v.reason,
-
-        v.status
-      ]),
-
-      headStyles: {
-        fillColor: [15, 23, 42],
-        fontSize: 8,
-        halign: 'center'
-      },
-
-      bodyStyles: {
-        fontSize: 7
-      },
-
-      alternateRowStyles: {
-        fillColor: [250, 250, 250]
-      }
+        new Date(v.visit_time)
+          .toLocaleString()
+      ])
     });
 
     doc.save(
-      `QNHS_Clinic_Log_${new Date().toISOString().split('T')[0]}.pdf`
+      `QNHS_Clinic_Report.pdf`
     );
   };
 
-  // FREQUENT VISITORS
-  const frequentVisitors = useMemo(() => {
+  // =====================
+  // LOADING
+  // =====================
+  if (loading) {
 
-    const counts: Record<string, number> = {};
+    return (
+      <div className="p-10 font-black">
+        Loading Reports...
+      </div>
+    );
+  }
 
-    visits.forEach(v => {
-      if (v.students?.name) {
-        counts[v.students.name] =
-          (counts[v.students.name] || 0) + 1;
-      }
-    });
-
-    return Object.keys(counts)
-      .filter(name => counts[name] >= 3);
-
-  }, [visits]);
-
-  // SUBJECTS
-  const uniqueSubjects = useMemo(() => {
-
-    const subjects = visits
-      .map(v => v.subject_at_time)
-      .filter(Boolean);
-
-    return Array.from(new Set(subjects)).sort();
-
-  }, [visits]);
-
+  // =====================
+  // UI
+  // =====================
   return (
-    <div className="flex min-h-screen bg-[#F8FAFC] text-slate-900 font-sans tracking-tight">
+
+    <div className="flex min-h-screen bg-[#F8FAFC] text-slate-900">
 
       {/* SIDEBAR */}
-      <aside className="w-64 bg-[#0F172A] text-white flex flex-col p-6 space-y-8 sticky h-screen top-0 shadow-2xl z-30">
+      <aside className="w-64 bg-[#0F172A] text-white flex flex-col p-6 space-y-8 sticky top-0 h-screen">
 
         <div className="flex items-center gap-3">
-          <div className="bg-[#14B8A6] p-2 rounded-xl shadow-lg">
+
+          <div className="bg-[#14B8A6] p-2 rounded-xl">
             <Activity size={24} />
           </div>
 
-          <h1 className="text-xl font-black uppercase tracking-tighter">
+          <h1 className="font-black text-xl">
             QNHS Clinic
           </h1>
         </div>
 
-        <nav className="flex-1 space-y-2 font-bold text-sm">
+        <nav className="flex-1 space-y-2">
 
           <button
             onClick={() => router.push('/')}
-            className="flex items-center gap-3 w-full p-3.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-2xl transition-all"
+            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-800 text-slate-300"
           >
             <LayoutDashboard size={20} />
             Dashboard
@@ -359,7 +302,7 @@ Other: ${v.other_intervention || 'None'}
 
           <button
             onClick={() => router.push('/logvisit')}
-            className="flex items-center gap-3 w-full p-3.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-2xl transition-all"
+            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-800 text-slate-300"
           >
             <PlusCircle size={20} />
             Log Visit
@@ -367,13 +310,13 @@ Other: ${v.other_intervention || 'None'}
 
           <button
             onClick={() => router.push('/students')}
-            className="flex items-center gap-3 w-full p-3.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded-2xl transition-all"
+            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-800 text-slate-300"
           >
             <Users size={20} />
             Students
           </button>
 
-          <button className="flex items-center gap-3 w-full p-3.5 bg-[#14B8A6] text-white rounded-2xl shadow-xl shadow-teal-500/10 font-bold transition-all">
+          <button className="w-full flex items-center gap-3 p-3 rounded-2xl bg-[#14B8A6] text-white">
             <FileText size={20} />
             Reports
           </button>
@@ -381,250 +324,411 @@ Other: ${v.other_intervention || 'None'}
 
         <button
           onClick={() =>
-            supabase.auth.signOut().then(() => router.push('/login'))
+            supabase.auth
+              .signOut()
+              .then(() => router.push('/login'))
           }
-          className="flex items-center gap-3 p-4 text-red-400 hover:bg-red-500/10 rounded-2xl font-bold transition-all"
+          className="flex items-center gap-3 text-red-400 font-bold"
         >
           <LogOut size={20} />
           Sign Out
         </button>
       </aside>
 
-      <main className="flex-1 p-8 overflow-y-auto bg-[radial-gradient(#e2e8f0_1px,transparent_1px)] [background-size:24px_24px]">
+      {/* MAIN */}
+      <main className="flex-1 p-8 overflow-y-auto">
 
         {/* HEADER */}
-        <header className="flex flex-col xl:flex-row justify-between items-start xl:items-center mb-10 gap-6">
+        <div className="flex justify-between items-center mb-10">
 
           <div>
-            <h2 className="text-5xl font-black text-slate-900 tracking-tighter">
-              Clinical Intelligence
-            </h2>
 
-            <p className="text-slate-400 font-bold uppercase text-[10px] tracking-[0.3em] mt-2">
-              Formal Documentation Portal
+            <h1 className="text-5xl font-black">
+              Clinical Intelligence
+            </h1>
+
+            <p className="text-slate-400 font-bold uppercase text-xs mt-2">
+              Reports & Analytics
             </p>
           </div>
 
-          <div className="flex gap-3">
-
-            <button
-              onClick={() => exportFormalPDF('p')}
-              className="bg-white border border-slate-200 text-slate-700 px-6 py-4 rounded-2xl font-black shadow-sm hover:bg-slate-50 transition-all flex items-center gap-3 uppercase text-[10px] tracking-widest"
-            >
-              <FileText size={16} />
-              Portrait PDF
-            </button>
-
-            <button
-              onClick={() => exportFormalPDF('l')}
-              className="bg-[#0F172A] text-white px-8 py-4 rounded-2xl font-black shadow-xl hover:bg-slate-800 transition-all flex items-center gap-3 uppercase text-[10px] tracking-widest"
-            >
-              <Printer size={18} className="text-teal-400" />
-              Landscape PDF
-            </button>
-          </div>
-        </header>
+          <button
+            onClick={exportFormalPDF}
+            className="bg-[#0F172A] text-white px-6 py-4 rounded-2xl flex items-center gap-3 font-black"
+          >
+            <Printer size={18} />
+            Export PDF
+          </button>
+        </div>
 
         {/* SUMMARY */}
-        <div className="bg-white rounded-[2.5rem] p-8 shadow-xl border border-white mb-10 flex flex-wrap items-center justify-between gap-8">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
 
-          <div className="flex items-center gap-5">
-            <div className="bg-teal-50 p-5 rounded-[1.5rem] text-teal-600">
-              <TrendingUp size={30}/>
-            </div>
+          <div className="bg-white rounded-3xl p-6 shadow-xl">
 
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                Total Logs Selected
-              </p>
+            <div className="flex items-center gap-4">
 
-              <p className="text-4xl font-black text-slate-800 tracking-tight">
-                {filteredData.length}
-              </p>
+              <div className="bg-teal-50 text-teal-600 p-4 rounded-2xl">
+                <TrendingUp size={28} />
+              </div>
+
+              <div>
+
+                <p className="text-xs uppercase text-slate-400 font-black">
+                  Total Logs
+                </p>
+
+                <h2 className="text-4xl font-black">
+                  {visits.length}
+                </h2>
+              </div>
             </div>
           </div>
 
-          <div className="flex items-center gap-5">
-            <div className="bg-red-50 p-5 rounded-[1.5rem] text-red-500">
-              <AlertTriangle size={30}/>
+          <div className="bg-white rounded-3xl p-6 shadow-xl">
+
+            <div className="flex items-center gap-4">
+
+              <div className="bg-blue-50 text-blue-600 p-4 rounded-2xl">
+                <UserSquare2 size={28} />
+              </div>
+
+              <div>
+
+                <p className="text-xs uppercase text-slate-400 font-black">
+                  Student Logs
+                </p>
+
+                <h2 className="text-4xl font-black">
+                  {studentVisits.length}
+                </h2>
+              </div>
             </div>
+          </div>
 
-            <div>
-              <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">
-                Sent Home Rate
-              </p>
+          <div className="bg-white rounded-3xl p-6 shadow-xl">
 
-              <p className="text-4xl font-black text-red-600">
-                {
-                  filteredData.length > 0
-                    ? Math.round(
-                        (
-                          filteredData.filter(
-                            v => v.status === 'Sent Home'
-                          ).length / filteredData.length
-                        ) * 100
-                      )
-                    : 0
-                }%
-              </p>
+            <div className="flex items-center gap-4">
+
+              <div className="bg-purple-50 text-purple-600 p-4 rounded-2xl">
+                <Briefcase size={28} />
+              </div>
+
+              <div>
+
+                <p className="text-xs uppercase text-slate-400 font-black">
+                  Employee Logs
+                </p>
+
+                <h2 className="text-4xl font-black">
+                  {employeeVisits.length}
+                </h2>
+              </div>
             </div>
           </div>
         </div>
 
-        {/* TABLE */}
-        <div className="bg-white rounded-[4rem] shadow-2xl border border-white overflow-hidden mb-20">
+        {/* ANALYTICS */}
+        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12">
 
-          <table className="w-full text-left">
+          {/* SUBJECT ANALYTICS */}
+          <div className="bg-white rounded-[2rem] p-8 shadow-xl">
 
-            <thead className="bg-slate-50/50 text-slate-400 text-[10px] uppercase font-black tracking-[0.3em] border-b border-slate-100">
+            <h2 className="text-2xl font-black mb-6">
+              Most Subjects
+            </h2>
+
+            <div className="h-80">
+
+              <ResponsiveContainer width="100%" height="100%">
+
+                <BarChart data={subjectAnalytics}>
+
+                  <CartesianGrid strokeDasharray="3 3" />
+
+                  <XAxis dataKey="name" />
+
+                  <YAxis />
+
+                  <Tooltip />
+
+                  <Bar dataKey="value" radius={[10,10,0,0]} />
+
+                </BarChart>
+
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* REASON ANALYTICS */}
+          <div className="bg-white rounded-[2rem] p-8 shadow-xl">
+
+            <h2 className="text-2xl font-black mb-6">
+              Most Reasons for Clinic Visits
+            </h2>
+
+            <div className="h-80">
+
+              <ResponsiveContainer width="100%" height="100%">
+
+                <BarChart data={reasonAnalytics}>
+
+                  <CartesianGrid strokeDasharray="3 3" />
+
+                  <XAxis dataKey="name" />
+
+                  <YAxis />
+
+                  <Tooltip />
+
+                  <Bar dataKey="value" radius={[10,10,0,0]} />
+
+                </BarChart>
+
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </div>
+
+        {/* STUDENT TABLE */}
+        <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden mb-16">
+
+          <div className="px-10 py-8 border-b">
+
+            <h2 className="text-3xl font-black">
+              Student Records
+            </h2>
+          </div>
+
+          <table className="w-full">
+
+            <thead className="bg-slate-50">
 
               <tr>
-                <th className="px-8 py-8">Patient</th>
-                <th className="px-6 py-8 text-center">Vitals</th>
-                <th className="px-6 py-8 text-center">Medicine</th>
-                <th className="px-6 py-8 text-center">Intervention</th>
-                <th className="px-6 py-8 text-center">Outcome</th>
-                <th className="px-8 py-8 text-right">Observation</th>
+
+                <th className="px-8 py-6 text-left">
+                  Student
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Vitals
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Medicine
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Status
+                </th>
+
+                <th className="px-8 py-6 text-right">
+                  Observation
+                </th>
+
               </tr>
             </thead>
 
-            <tbody className="divide-y divide-slate-50">
+            <tbody>
 
-              {filteredData.map((v) => (
+              {studentVisits.map((v) => (
 
                 <tr
                   key={v.id}
-                  className="group hover:bg-slate-50/50 transition-all duration-300"
+                  className="border-t hover:bg-slate-50"
                 >
 
-                  {/* PATIENT */}
-                  <td className="px-8 py-8">
+                  <td className="px-8 py-6">
 
-                    <div className="flex items-center gap-5">
-
-                      <div className={`w-14 h-14 rounded-2xl flex items-center justify-center font-black text-xl shadow-inner ${
-                        v.status === 'Sent Home'
-                          ? 'bg-red-50 text-red-500'
-                          : 'bg-teal-50 text-teal-600'
-                      }`}>
-                        {v.students?.name.charAt(0)}
-                      </div>
-
-                      <div>
-
-                        <p className="font-black text-slate-800 text-xl tracking-tighter flex items-center gap-2">
-                          {v.students?.name}
-
-                          {frequentVisitors.includes(v.students?.name) && (
-                            <span className="bg-amber-100 text-amber-600 p-1 rounded-full animate-pulse">
-                              <AlertTriangle size={12} />
-                            </span>
-                          )}
-                        </p>
-
-                        <p className="text-[10px] text-slate-400 font-bold uppercase tracking-[0.2em] mt-1">
-                          {v.students?.strand
-                            ? `${v.students?.strand} • `
-                            : ''
-                          }
-                          G{v.students?.grade_level}
-                          {' • '}
-                          {v.students?.section}
-                        </p>
-
-                      </div>
-                    </div>
-                  </td>
-
-                  {/* VITALS */}
-                  <td className="px-6 py-8 text-center">
-
-                    <div className="space-y-2 text-[11px] font-black">
-
-                      <div className="flex items-center justify-center gap-1 text-red-500">
-                        <HeartPulse size={13} />
-                        {v.temperature || '--'}°C
-                      </div>
-
-                      <div className="text-slate-500">
-                        BP: {v.blood_pressure || '--'}
-                      </div>
-
-                      <div className="flex items-center justify-center gap-1 text-blue-500">
-                        <Droplets size={13} />
-                        {v.oxygen_saturation || '--'}%
-                      </div>
-
-                      <div className="flex items-center justify-center gap-1 text-slate-500">
-                        <Scale size={13} />
-                        {v.weight || '--'}kg
-                      </div>
-
-                    </div>
-                  </td>
-
-                  {/* MEDICINE */}
-                  <td className="px-6 py-8 text-center">
-
-                    <div className="flex flex-col items-center gap-2">
-
-                      <div className="flex items-center gap-1 text-emerald-600 font-black text-xs">
-                        <Pill size={14} />
-                        {v.medicine_given || 'None'}
-                      </div>
-
-                      <p className="text-[10px] text-green-500 font-bold">
-                        Herbal: {v.herbal_given || 'None'}
-                      </p>
-
-                    </div>
-                  </td>
-
-                  {/* INTERVENTION */}
-                  <td className="px-6 py-8 text-center">
-
-                    <p className="text-xs font-bold text-slate-600 max-w-[150px] mx-auto">
-                      {v.other_intervention || 'None'}
+                    <p className="font-black text-lg">
+                      {v.students?.name}
                     </p>
 
+                    <p className="text-xs text-slate-400 font-bold uppercase">
+                      Grade {v.students?.grade_level}
+                    </p>
                   </td>
 
-                  {/* STATUS */}
-                  <td className="px-6 py-8 text-center">
+                  <td className="px-6 py-6 text-center text-sm font-bold">
 
-                    <span className={`px-6 py-2.5 rounded-2xl text-[10px] font-black uppercase tracking-widest border ${
+                    <div>{v.temperature || '--'}°C</div>
+
+                    <div>
+                      BP: {v.blood_pressure || '--'}
+                    </div>
+
+                    <div>
+                      SpO2: {v.oxygen_saturation || '--'}%
+                    </div>
+
+                    <div>
+                      {v.weight || '--'}kg
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-6 text-center">
+
+                    <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-sm">
+
+                      <Pill size={14} />
+
+                      {v.medicine_given || 'None'}
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-6 text-center">
+
+                    <span className={`px-4 py-2 rounded-xl text-xs font-black ${
                       v.status === 'Sent Home'
-                        ? 'bg-red-50 text-red-600 border-red-100'
-                        : v.status === 'Resting in Clinic'
-                        ? 'bg-amber-50 text-amber-600 border-amber-100'
-                        : 'bg-teal-50 text-teal-600 border-teal-100'
+                        ? 'bg-red-100 text-red-600'
+                        : 'bg-teal-100 text-teal-600'
                     }`}>
                       {v.status}
                     </span>
-
                   </td>
 
-                  {/* OBSERVATION */}
-                  <td className="px-8 py-8 text-right">
+                  <td className="px-8 py-6 text-right">
 
-                    <p className="text-slate-500 font-bold italic text-sm leading-relaxed max-w-xs ml-auto">
+                    <p className="italic text-slate-500">
                       "{v.reason}"
                     </p>
 
-                    <p className="text-[9px] text-slate-300 uppercase mt-1">
+                    <p className="text-xs text-slate-400 mt-1">
                       {v.subject_at_time}
-                      {' • '}
-                      {new Date(v.visit_time).toLocaleDateString()}
                     </p>
-
                   </td>
 
                 </tr>
-
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* EMPLOYEE TABLE */}
+        <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden">
+
+          <div className="px-10 py-8 border-b">
+
+            <h2 className="text-3xl font-black">
+              Employee Records
+            </h2>
+          </div>
+
+          <table className="w-full">
+
+            <thead className="bg-slate-50">
+
+              <tr>
+
+                <th className="px-8 py-6 text-left">
+                  Employee
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Employee Type
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Vitals
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Medicine
+                </th>
+
+                <th className="px-6 py-6 text-center">
+                  Status
+                </th>
+
+                <th className="px-8 py-6 text-right">
+                  Observation
+                </th>
+
+              </tr>
+            </thead>
+
+            <tbody>
+
+              {employeeVisits.map((v) => (
+
+                <tr
+                  key={v.id}
+                  className="border-t hover:bg-slate-50"
+                >
+
+                  <td className="px-8 py-6">
+
+                    <p className="font-black text-lg">
+                      {v.full_name}
+                    </p>
+
+                    <p className="text-xs text-slate-400 uppercase font-bold">
+                      Employee
+                    </p>
+                  </td>
+
+                  <td className="px-6 py-6 text-center font-bold">
+
+                    {v.employee_type || 'Staff'}
+
+                  </td>
+
+                  <td className="px-6 py-6 text-center text-sm font-bold">
+
+                    <div>{v.temperature || '--'}°C</div>
+
+                    <div>
+                      BP: {v.blood_pressure || '--'}
+                    </div>
+
+                    <div>
+                      SpO2: {v.oxygen_saturation || '--'}%
+                    </div>
+
+                    <div>
+                      {v.weight || '--'}kg
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-6 text-center">
+
+                    <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-sm">
+
+                      <Pill size={14} />
+
+                      {v.medicine_given || 'None'}
+                    </div>
+                  </td>
+
+                  <td className="px-6 py-6 text-center">
+
+                    <span className={`px-4 py-2 rounded-xl text-xs font-black ${
+                      v.status === 'Sent Home'
+                        ? 'bg-red-100 text-red-600'
+                        : 'bg-teal-100 text-teal-600'
+                    }`}>
+                      {v.status}
+                    </span>
+                  </td>
+
+                  <td className="px-8 py-6 text-right">
+
+                    <p className="italic text-slate-500">
+                      "{v.reason}"
+                    </p>
+
+                    <p className="text-xs text-slate-400 mt-1">
+                      {new Date(v.visit_time)
+                        .toLocaleDateString()}
+                    </p>
+                  </td>
+
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
       </main>
     </div>
   );
