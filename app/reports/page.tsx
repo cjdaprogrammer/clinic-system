@@ -1,8 +1,9 @@
-'use client'
+'use client';
 
 import { useState, useEffect, useMemo } from 'react';
 import { supabase } from '../../lib/supabase';
 import { useRouter } from 'next/navigation';
+
 import {
   LayoutDashboard,
   PlusCircle,
@@ -18,7 +19,12 @@ import {
   Scale,
   HeartPulse,
   Briefcase,
-  UserSquare2
+  UserSquare2,
+  CalendarDays,
+  Clock3,
+  Filter,
+  Stethoscope,
+  ClipboardList
 } from 'lucide-react';
 
 import jsPDF from 'jspdf';
@@ -34,9 +40,9 @@ import {
   Tooltip
 } from 'recharts';
 
-// =====================
+// =========================
 // TYPES
-// =====================
+// =========================
 interface Visit {
   id: string;
   visit_time: string;
@@ -49,10 +55,7 @@ interface Visit {
   oxygen_saturation?: string;
   weight?: string;
   medicine_given?: string;
-  herbal_given?: string;
-  other_intervention?: string;
 
-  // EMPLOYEE
   visitor_type?: string;
   full_name?: string;
   employee_type?: string;
@@ -66,19 +69,19 @@ interface Visit {
 }
 
 export default function ReportsPage() {
-
   const router = useRouter();
 
   const [visits, setVisits] = useState<Visit[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // =====================
+  const [visitorFilter, setVisitorFilter] = useState('All');
+  const [timeFilter, setTimeFilter] = useState('All');
+
+  // =========================
   // AUTH
-  // =====================
+  // =========================
   useEffect(() => {
-
     const checkUser = async () => {
-
       const {
         data: { session }
       } = await supabase.auth.getSession();
@@ -91,14 +94,12 @@ export default function ReportsPage() {
     };
 
     checkUser();
-
   }, [router]);
 
-  // =====================
+  // =========================
   // FETCH
-  // =====================
+  // =========================
   async function fetchAllData() {
-
     setLoading(true);
 
     const { data } = await supabase
@@ -121,22 +122,76 @@ export default function ReportsPage() {
     setLoading(false);
   }
 
-  // =====================
+  // =========================
+  // FILTERS
+  // =========================
+  const filteredVisits = useMemo(() => {
+    let data = [...visits];
+
+    // VISITOR FILTER
+    if (visitorFilter === 'Students') {
+      data = data.filter(
+        (v) => v.visitor_type !== 'Employee'
+      );
+    }
+
+    if (visitorFilter === 'Employees') {
+      data = data.filter(
+        (v) => v.visitor_type === 'Employee'
+      );
+    }
+
+    // TIME FILTER
+    const now = new Date();
+
+    if (timeFilter === 'Today') {
+      data = data.filter((v) => {
+        const d = new Date(v.visit_time);
+
+        return (
+          d.getDate() === now.getDate() &&
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear()
+        );
+      });
+    }
+
+    if (timeFilter === 'This Week') {
+      data = data.filter((v) => {
+        const d = new Date(v.visit_time);
+
+        const diff =
+          (now.getTime() - d.getTime()) /
+          (1000 * 60 * 60 * 24);
+
+        return diff <= 7;
+      });
+    }
+
+    if (timeFilter === 'This Month') {
+      data = data.filter((v) => {
+        const d = new Date(v.visit_time);
+
+        return (
+          d.getMonth() === now.getMonth() &&
+          d.getFullYear() === now.getFullYear()
+        );
+      });
+    }
+
+    return data;
+  }, [visits, visitorFilter, timeFilter]);
+
+  // =========================
   // ANALYTICS
-  // =====================
-
-  // MOST SUBJECTS
+  // =========================
   const subjectAnalytics = useMemo(() => {
-
     const counts: Record<string, number> = {};
 
-    visits.forEach(v => {
+    filteredVisits.forEach((v) => {
+      const sub = v.subject_at_time || 'General';
 
-      const subject =
-        v.subject_at_time || 'Unknown';
-
-      counts[subject] =
-        (counts[subject] || 0) + 1;
+      counts[sub] = (counts[sub] || 0) + 1;
     });
 
     return Object.entries(counts)
@@ -146,21 +201,15 @@ export default function ReportsPage() {
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
+  }, [filteredVisits]);
 
-  }, [visits]);
-
-  // MOST REASONS
   const reasonAnalytics = useMemo(() => {
-
     const counts: Record<string, number> = {};
 
-    visits.forEach(v => {
+    filteredVisits.forEach((v) => {
+      const reason = v.reason || 'Unspecified';
 
-      const reason =
-        v.reason || 'Unknown';
-
-      counts[reason] =
-        (counts[reason] || 0) + 1;
+      counts[reason] = (counts[reason] || 0) + 1;
     });
 
     return Object.entries(counts)
@@ -170,47 +219,49 @@ export default function ReportsPage() {
       }))
       .sort((a, b) => b.value - a.value)
       .slice(0, 6);
+  }, [filteredVisits]);
 
-  }, [visits]);
+  // =========================
+  // COUNTS
+  // =========================
+  const studentVisits = filteredVisits.filter(
+    (v) => v.visitor_type !== 'Employee'
+  );
 
-  // STUDENTS ONLY
-  const studentVisits = useMemo(() => {
+  const employeeVisits = filteredVisits.filter(
+    (v) => v.visitor_type === 'Employee'
+  );
 
-    return visits.filter(
-      v => v.visitor_type !== 'Employee'
-    );
+  const sentHomeCount = filteredVisits.filter(
+    (v) => v.status === 'Sent Home'
+  ).length;
 
-  }, [visits]);
-
-  // EMPLOYEES ONLY
-  const employeeVisits = useMemo(() => {
-
-    return visits.filter(
-      v => v.visitor_type === 'Employee'
-    );
-
-  }, [visits]);
-
-  // =====================
-  // PDF EXPORT
-  // =====================
-  const exportFormalPDF = () => {
-
+  // =========================
+  // PDF
+  // =========================
+  const exportPDF = () => {
     const doc = new jsPDF({
       orientation: 'landscape'
     });
 
-    doc.setFontSize(18);
+    doc.setFontSize(20);
 
     doc.text(
-      'QNHS CLINIC REPORT',
+      'QNHS CLINIC HEALTH REPORT',
       14,
       20
     );
 
-    autoTable(doc, {
+    doc.setFontSize(10);
 
-      startY: 30,
+    doc.text(
+      `Generated: ${new Date().toLocaleString()}`,
+      14,
+      28
+    );
+
+    autoTable(doc, {
+      startY: 35,
 
       head: [[
         'Visitor',
@@ -223,8 +274,7 @@ export default function ReportsPage() {
         'Date'
       ]],
 
-      body: visits.map(v => [
-
+      body: filteredVisits.map((v) => [
         v.visitor_type === 'Employee'
           ? v.full_name
           : v.students?.name,
@@ -238,100 +288,147 @@ export default function ReportsPage() {
         v.reason,
 
         `
-T:${v.temperature || '--'}
-BP:${v.blood_pressure || '--'}
-SpO2:${v.oxygen_saturation || '--'}
+Temp: ${v.temperature || '--'}
+BP: ${v.blood_pressure || '--'}
+SpO2: ${v.oxygen_saturation || '--'}
+Weight: ${v.weight || '--'}
         `,
 
         v.medicine_given || 'None',
 
         v.status,
 
-        new Date(v.visit_time)
-          .toLocaleString()
+        new Date(v.visit_time).toLocaleString()
       ])
     });
 
-    doc.save(
-      `QNHS_Clinic_Report.pdf`
-    );
+    doc.save('QNHS_Clinic_Report.pdf');
   };
 
-  // =====================
+  // =========================
   // LOADING
-  // =====================
+  // =========================
   if (loading) {
-
     return (
-      <div className="p-10 font-black">
-        Loading Reports...
+      <div className="min-h-screen flex items-center justify-center bg-slate-50">
+        <div className="text-2xl font-black text-slate-700 animate-pulse">
+          Loading Clinical Reports...
+        </div>
       </div>
     );
   }
 
-  // =====================
+  // =========================
   // UI
-  // =====================
+  // =========================
   return (
-
-    <div className="flex min-h-screen bg-[#F8FAFC] text-slate-900">
+    <div className="flex min-h-screen bg-[#F8FAFC] text-slate-900 font-sans tracking-tight">
 
       {/* SIDEBAR */}
-      <aside className="w-64 bg-[#0F172A] text-white flex flex-col p-6 space-y-8 sticky top-0 h-screen">
+      <aside className="w-64 bg-[#0B1533] text-white flex flex-col p-6 space-y-8 sticky h-screen top-0 shadow-2xl">
 
-        <div className="flex items-center gap-3">
+        {/* LOGO */}
+        <div className="flex items-center gap-3 px-2">
 
-          <div className="bg-[#14B8A6] p-2 rounded-xl">
+          <div className="bg-[#14B8A6] p-3 rounded-2xl shadow-lg shadow-teal-500/20">
             <Activity size={24} />
           </div>
 
-          <h1 className="font-black text-xl">
+          <h1 className="text-xl font-black tracking-tighter uppercase">
             QNHS Clinic
           </h1>
         </div>
 
-        <nav className="flex-1 space-y-2">
+        {/* NAVIGATION */}
+        <nav className="flex-1 space-y-2 text-white font-bold">
 
           <button
             onClick={() => router.push('/')}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-800 text-slate-300"
+            className="
+              flex items-center gap-3 w-full p-3.5
+              text-slate-400 hover:text-white
+              hover:bg-slate-800 rounded-2xl
+              transition-all font-semibold
+            "
           >
             <LayoutDashboard size={20} />
-            Dashboard
+
+            <span className="text-[1.02rem]">
+              Dashboard
+            </span>
           </button>
 
           <button
             onClick={() => router.push('/logvisit')}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-800 text-slate-300"
+            className="
+              flex items-center gap-3 w-full p-3.5
+              text-slate-400 hover:text-white
+              hover:bg-slate-800 rounded-2xl
+              transition-all font-semibold
+            "
           >
             <PlusCircle size={20} />
-            Log Visit
+
+            <span className="text-[1.02rem]">
+              Log Visit
+            </span>
           </button>
 
           <button
             onClick={() => router.push('/students')}
-            className="w-full flex items-center gap-3 p-3 rounded-2xl hover:bg-slate-800 text-slate-300"
+            className="
+              flex items-center gap-3 w-full p-3.5
+              text-slate-400 hover:text-white
+              hover:bg-slate-800 rounded-2xl
+              transition-all font-semibold
+            "
           >
             <Users size={20} />
-            Students
+
+            <span className="text-[1.02rem]">
+              Students
+            </span>
           </button>
 
-          <button className="w-full flex items-center gap-3 p-3 rounded-2xl bg-[#14B8A6] text-white">
+          <button
+            className="
+              flex items-center gap-3 w-full p-3.5
+              bg-[#14B8A6] text-white
+              rounded-2xl shadow-xl
+              shadow-teal-500/10
+              font-bold transition-all
+            "
+          >
             <FileText size={20} />
-            Reports
+
+            <span className="text-[1.02rem]">
+              Reports
+            </span>
           </button>
         </nav>
 
+        {/* SIGN OUT */}
         <button
           onClick={() =>
             supabase.auth
               .signOut()
               .then(() => router.push('/login'))
           }
-          className="flex items-center gap-3 text-red-400 font-bold"
+          className="
+            flex items-center gap-3 p-4
+            text-red-400 hover:bg-red-500/10
+            rounded-2xl font-bold
+            transition-all group
+          "
         >
-          <LogOut size={20} />
-          Sign Out
+          <LogOut
+            size={20}
+            className="group-hover:-translate-x-1 transition-transform"
+          />
+
+          <span className="text-[1.02rem]">
+            Sign Out
+          </span>
         </button>
       </aside>
 
@@ -339,396 +436,143 @@ SpO2:${v.oxygen_saturation || '--'}
       <main className="flex-1 p-8 overflow-y-auto">
 
         {/* HEADER */}
-        <div className="flex justify-between items-center mb-10">
+        <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-6 mb-10">
 
           <div>
-
-            <h1 className="text-5xl font-black">
-              Clinical Intelligence
+            <h1 className="text-5xl font-black tracking-tight text-slate-800">
+              Clinic Analytics & Reports
             </h1>
 
-            <p className="text-slate-400 font-bold uppercase text-xs mt-2">
-              Reports & Analytics
+            <p className="uppercase text-xs tracking-[0.3em] text-slate-400 font-black mt-3">
+              Health Monitoring & Patient Intelligence
             </p>
           </div>
 
           <button
-            onClick={exportFormalPDF}
-            className="bg-[#0F172A] text-white px-6 py-4 rounded-2xl flex items-center gap-3 font-black"
+            onClick={exportPDF}
+            className="bg-[#0F172A] text-white px-7 py-4 rounded-2xl flex items-center gap-3 font-black shadow-xl hover:bg-slate-800 transition-all"
           >
             <Printer size={18} />
             Export PDF
           </button>
         </div>
 
+        {/* FILTERS */}
+        <div className="bg-white rounded-[2rem] shadow-xl p-6 mb-10 flex flex-wrap items-center gap-5 border border-slate-100">
+
+          <div className="flex items-center gap-3">
+            <Filter size={18} className="text-teal-600" />
+
+            <p className="font-black text-sm text-slate-500 uppercase">
+              Filters
+            </p>
+          </div>
+
+          <select
+            value={visitorFilter}
+            onChange={(e) =>
+              setVisitorFilter(e.target.value)
+            }
+            className="px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 font-bold outline-none"
+          >
+            <option>All</option>
+            <option>Students</option>
+            <option>Employees</option>
+          </select>
+
+          <select
+            value={timeFilter}
+            onChange={(e) =>
+              setTimeFilter(e.target.value)
+            }
+            className="px-5 py-3 rounded-2xl bg-slate-50 border border-slate-200 font-bold outline-none"
+          >
+            <option>All</option>
+            <option>Today</option>
+            <option>This Week</option>
+            <option>This Month</option>
+          </select>
+        </div>
+
         {/* SUMMARY */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
 
-          <div className="bg-white rounded-3xl p-6 shadow-xl">
-
-            <div className="flex items-center gap-4">
-
-              <div className="bg-teal-50 text-teal-600 p-4 rounded-2xl">
-                <TrendingUp size={28} />
-              </div>
+          <div className="bg-white p-7 rounded-[2rem] shadow-xl">
+            <div className="flex items-center justify-between">
 
               <div>
-
-                <p className="text-xs uppercase text-slate-400 font-black">
-                  Total Logs
+                <p className="uppercase text-xs font-black text-slate-400 mb-2">
+                  Total Visits
                 </p>
 
-                <h2 className="text-4xl font-black">
-                  {visits.length}
+                <h2 className="text-5xl font-black text-slate-800">
+                  {filteredVisits.length}
                 </h2>
+              </div>
+
+              <div className="bg-teal-50 p-4 rounded-2xl text-teal-600">
+                <TrendingUp size={30} />
               </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-xl">
-
-            <div className="flex items-center gap-4">
-
-              <div className="bg-blue-50 text-blue-600 p-4 rounded-2xl">
-                <UserSquare2 size={28} />
-              </div>
+          <div className="bg-white p-7 rounded-[2rem] shadow-xl">
+            <div className="flex items-center justify-between">
 
               <div>
-
-                <p className="text-xs uppercase text-slate-400 font-black">
-                  Student Logs
+                <p className="uppercase text-xs font-black text-slate-400 mb-2">
+                  Student Visits
                 </p>
 
-                <h2 className="text-4xl font-black">
+                <h2 className="text-5xl font-black text-blue-600">
                   {studentVisits.length}
                 </h2>
               </div>
+
+              <div className="bg-blue-50 p-4 rounded-2xl text-blue-600">
+                <UserSquare2 size={30} />
+              </div>
             </div>
           </div>
 
-          <div className="bg-white rounded-3xl p-6 shadow-xl">
-
-            <div className="flex items-center gap-4">
-
-              <div className="bg-purple-50 text-purple-600 p-4 rounded-2xl">
-                <Briefcase size={28} />
-              </div>
+          <div className="bg-white p-7 rounded-[2rem] shadow-xl">
+            <div className="flex items-center justify-between">
 
               <div>
-
-                <p className="text-xs uppercase text-slate-400 font-black">
-                  Employee Logs
+                <p className="uppercase text-xs font-black text-slate-400 mb-2">
+                  Employee Visits
                 </p>
 
-                <h2 className="text-4xl font-black">
+                <h2 className="text-5xl font-black text-purple-600">
                   {employeeVisits.length}
                 </h2>
               </div>
-            </div>
-          </div>
-        </div>
 
-        {/* ANALYTICS */}
-        <div className="grid grid-cols-1 xl:grid-cols-2 gap-8 mb-12">
-
-          {/* SUBJECT ANALYTICS */}
-          <div className="bg-white rounded-[2rem] p-8 shadow-xl">
-
-            <h2 className="text-2xl font-black mb-6">
-              Most Subjects
-            </h2>
-
-            <div className="h-80">
-
-              <ResponsiveContainer width="100%" height="100%">
-
-                <BarChart data={subjectAnalytics}>
-
-                  <CartesianGrid strokeDasharray="3 3" />
-
-                  <XAxis dataKey="name" />
-
-                  <YAxis />
-
-                  <Tooltip />
-
-                  <Bar dataKey="value" radius={[10,10,0,0]} />
-
-                </BarChart>
-
-              </ResponsiveContainer>
+              <div className="bg-purple-50 p-4 rounded-2xl text-purple-600">
+                <Briefcase size={30} />
+              </div>
             </div>
           </div>
 
-          {/* REASON ANALYTICS */}
-          <div className="bg-white rounded-[2rem] p-8 shadow-xl">
+          <div className="bg-white p-7 rounded-[2rem] shadow-xl">
+            <div className="flex items-center justify-between">
 
-            <h2 className="text-2xl font-black mb-6">
-              Most Reasons for Clinic Visits
-            </h2>
+              <div>
+                <p className="uppercase text-xs font-black text-slate-400 mb-2">
+                  Sent Home
+                </p>
 
-            <div className="h-80">
+                <h2 className="text-5xl font-black text-red-500">
+                  {sentHomeCount}
+                </h2>
+              </div>
 
-              <ResponsiveContainer width="100%" height="100%">
-
-                <BarChart data={reasonAnalytics}>
-
-                  <CartesianGrid strokeDasharray="3 3" />
-
-                  <XAxis dataKey="name" />
-
-                  <YAxis />
-
-                  <Tooltip />
-
-                  <Bar dataKey="value" radius={[10,10,0,0]} />
-
-                </BarChart>
-
-              </ResponsiveContainer>
+              <div className="bg-red-50 p-4 rounded-2xl text-red-500">
+                <AlertTriangle size={30} />
+              </div>
             </div>
           </div>
         </div>
-
-        {/* STUDENT TABLE */}
-        <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden mb-16">
-
-          <div className="px-10 py-8 border-b">
-
-            <h2 className="text-3xl font-black">
-              Student Records
-            </h2>
-          </div>
-
-          <table className="w-full">
-
-            <thead className="bg-slate-50">
-
-              <tr>
-
-                <th className="px-8 py-6 text-left">
-                  Student
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Vitals
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Medicine
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Status
-                </th>
-
-                <th className="px-8 py-6 text-right">
-                  Observation
-                </th>
-
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {studentVisits.map((v) => (
-
-                <tr
-                  key={v.id}
-                  className="border-t hover:bg-slate-50"
-                >
-
-                  <td className="px-8 py-6">
-
-                    <p className="font-black text-lg">
-                      {v.students?.name}
-                    </p>
-
-                    <p className="text-xs text-slate-400 font-bold uppercase">
-                      Grade {v.students?.grade_level}
-                    </p>
-                  </td>
-
-                  <td className="px-6 py-6 text-center text-sm font-bold">
-
-                    <div>{v.temperature || '--'}°C</div>
-
-                    <div>
-                      BP: {v.blood_pressure || '--'}
-                    </div>
-
-                    <div>
-                      SpO2: {v.oxygen_saturation || '--'}%
-                    </div>
-
-                    <div>
-                      {v.weight || '--'}kg
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-6 text-center">
-
-                    <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-sm">
-
-                      <Pill size={14} />
-
-                      {v.medicine_given || 'None'}
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-6 text-center">
-
-                    <span className={`px-4 py-2 rounded-xl text-xs font-black ${
-                      v.status === 'Sent Home'
-                        ? 'bg-red-100 text-red-600'
-                        : 'bg-teal-100 text-teal-600'
-                    }`}>
-                      {v.status}
-                    </span>
-                  </td>
-
-                  <td className="px-8 py-6 text-right">
-
-                    <p className="italic text-slate-500">
-                      "{v.reason}"
-                    </p>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      {v.subject_at_time}
-                    </p>
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
-        {/* EMPLOYEE TABLE */}
-        <div className="bg-white rounded-[3rem] shadow-2xl overflow-hidden">
-
-          <div className="px-10 py-8 border-b">
-
-            <h2 className="text-3xl font-black">
-              Employee Records
-            </h2>
-          </div>
-
-          <table className="w-full">
-
-            <thead className="bg-slate-50">
-
-              <tr>
-
-                <th className="px-8 py-6 text-left">
-                  Employee
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Employee Type
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Vitals
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Medicine
-                </th>
-
-                <th className="px-6 py-6 text-center">
-                  Status
-                </th>
-
-                <th className="px-8 py-6 text-right">
-                  Observation
-                </th>
-
-              </tr>
-            </thead>
-
-            <tbody>
-
-              {employeeVisits.map((v) => (
-
-                <tr
-                  key={v.id}
-                  className="border-t hover:bg-slate-50"
-                >
-
-                  <td className="px-8 py-6">
-
-                    <p className="font-black text-lg">
-                      {v.full_name}
-                    </p>
-
-                    <p className="text-xs text-slate-400 uppercase font-bold">
-                      Employee
-                    </p>
-                  </td>
-
-                  <td className="px-6 py-6 text-center font-bold">
-
-                    {v.employee_type || 'Staff'}
-
-                  </td>
-
-                  <td className="px-6 py-6 text-center text-sm font-bold">
-
-                    <div>{v.temperature || '--'}°C</div>
-
-                    <div>
-                      BP: {v.blood_pressure || '--'}
-                    </div>
-
-                    <div>
-                      SpO2: {v.oxygen_saturation || '--'}%
-                    </div>
-
-                    <div>
-                      {v.weight || '--'}kg
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-6 text-center">
-
-                    <div className="flex items-center justify-center gap-2 text-emerald-600 font-black text-sm">
-
-                      <Pill size={14} />
-
-                      {v.medicine_given || 'None'}
-                    </div>
-                  </td>
-
-                  <td className="px-6 py-6 text-center">
-
-                    <span className={`px-4 py-2 rounded-xl text-xs font-black ${
-                      v.status === 'Sent Home'
-                        ? 'bg-red-100 text-red-600'
-                        : 'bg-teal-100 text-teal-600'
-                    }`}>
-                      {v.status}
-                    </span>
-                  </td>
-
-                  <td className="px-8 py-6 text-right">
-
-                    <p className="italic text-slate-500">
-                      "{v.reason}"
-                    </p>
-
-                    <p className="text-xs text-slate-400 mt-1">
-                      {new Date(v.visit_time)
-                        .toLocaleDateString()}
-                    </p>
-                  </td>
-
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-
       </main>
     </div>
   );

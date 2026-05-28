@@ -1,12 +1,14 @@
 'use client'
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { supabase } from '../../lib/supabase';
 import {
   Activity,
   CheckCircle2,
   AlertCircle,
-  Loader2
+  Loader2,
+  Clock3,
+  CalendarDays
 } from 'lucide-react';
 
 export default function StudentKiosk() {
@@ -34,6 +36,19 @@ export default function StudentKiosk() {
   >('idle');
 
   const [message, setMessage] = useState('');
+
+  // =========================
+  // LIVE DATE & TIME
+  // =========================
+  const [currentTime, setCurrentTime] = useState(new Date());
+
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setCurrentTime(new Date());
+    }, 1000);
+
+    return () => clearInterval(timer);
+  }, []);
 
   // =========================
   // AUTO FILL STUDENT INFO
@@ -95,7 +110,6 @@ export default function StudentKiosk() {
       // =========================
       if (visitorType === 'Student') {
 
-        // Check if existing student
         let { data: student, error: fetchError } = await supabase
           .from('students')
           .select('id')
@@ -110,7 +124,6 @@ export default function StudentKiosk() {
 
         } else {
 
-          // Register new student
           const { data: newStudent, error: insertError } = await supabase
             .from('students')
             .insert([{
@@ -127,7 +140,6 @@ export default function StudentKiosk() {
 
           if (insertError) {
 
-            // Handle duplicate student safely
             if (insertError.code === '23505') {
 
               const { data: retryStudent } = await supabase
@@ -157,6 +169,25 @@ export default function StudentKiosk() {
       // =========================
       const currentDateTime = new Date();
 
+      const formattedDate = currentDateTime.toLocaleDateString(
+        'en-PH',
+        {
+          year: 'numeric',
+          month: 'long',
+          day: 'numeric'
+        }
+      );
+
+      const formattedTime = currentDateTime.toLocaleTimeString(
+        'en-PH',
+        {
+          hour: 'numeric',
+          minute: '2-digit',
+          second: '2-digit',
+          hour12: true
+        }
+      );
+
       // =========================
       // LOG CLINIC VISIT
       // =========================
@@ -166,7 +197,7 @@ export default function StudentKiosk() {
 
           student_id: finalStudentUuid,
 
-          // NEW FIELDS
+          // VISITOR DETAILS
           visitor_type: visitorType,
 
           employee_type:
@@ -178,7 +209,7 @@ export default function StudentKiosk() {
 
           full_name: fullName.trim(),
 
-          // EXISTING FIELDS
+          // CLINIC DETAILS
           reason: reason.trim(),
 
           subject_at_time:
@@ -188,19 +219,15 @@ export default function StudentKiosk() {
 
           status: 'Waiting',
 
-          // DATE & TIME
+          // EXACT DATE & TIME
           visit_time: currentDateTime.toISOString(),
 
+          logged_date: formattedDate,
+
+          logged_time: formattedTime,
+
           logged_in_at:
-            currentDateTime.toLocaleString('en-PH', {
-              year: 'numeric',
-              month: 'long',
-              day: 'numeric',
-              hour: 'numeric',
-              minute: '2-digit',
-              second: '2-digit',
-              hour12: true
-            })
+            `${formattedDate} • ${formattedTime}`
 
         }]);
 
@@ -273,6 +300,48 @@ export default function StudentKiosk() {
           <p className="text-slate-400 font-bold mt-2 text-sm uppercase tracking-widest">
             Student & Employee Intake Kiosk
           </p>
+
+          {/* LIVE DATE & TIME */}
+          <div className="mt-6 grid grid-cols-2 gap-4 w-full">
+
+            <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 flex items-center gap-3">
+              <CalendarDays className="text-teal-400" size={24} />
+
+              <div className="text-left">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
+                  Current Date
+                </p>
+
+                <p className="font-black text-lg text-white">
+                  {currentTime.toLocaleDateString('en-PH', {
+                    year: 'numeric',
+                    month: 'long',
+                    day: 'numeric'
+                  })}
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 flex items-center gap-3">
+              <Clock3 className="text-teal-400" size={24} />
+
+              <div className="text-left">
+                <p className="text-[10px] uppercase tracking-[0.2em] text-slate-400 font-black">
+                  Current Time
+                </p>
+
+                <p className="font-black text-lg text-white">
+                  {currentTime.toLocaleTimeString('en-PH', {
+                    hour: 'numeric',
+                    minute: '2-digit',
+                    second: '2-digit',
+                    hour12: true
+                  })}
+                </p>
+              </div>
+            </div>
+
+          </div>
 
         </div>
 
