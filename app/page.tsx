@@ -1,10 +1,13 @@
-'use client';
+'use client'
 
 import { useState, useEffect, useCallback } from 'react';
 import { supabase } from '../lib/supabase';
 import { useRouter } from 'next/navigation';
 
 import {
+  LayoutDashboard,
+  PlusCircle,
+  Users,
   LogOut,
   Search,
   Clock,
@@ -30,8 +33,10 @@ interface Visit {
 
   visit_time: string;
 
+  // LOGIN TIME
   logged_in_at?: string;
 
+  // EMPLOYEE FIELDS
   full_name?: string;
 
   visitor_type?: string;
@@ -90,13 +95,13 @@ export default function ClinicDashboard() {
     if (visitError) {
 
       console.error(
-        'VISIT FETCH ERROR:',
+        "VISIT FETCH ERROR:",
         visitError.message
       );
 
     } else {
 
-      setVisits((visitData as Visit[]) || []);
+      setVisits((visitData as any) || []);
 
     }
 
@@ -184,12 +189,13 @@ export default function ClinicDashboard() {
       : `Grade ${grade}`;
   };
 
+  // LOGIN TIME FORMATTER
   const formatLoginTime = (visit: Visit) => {
 
-    const date =
-      visit.logged_in_at || visit.visit_time;
-
-    return new Date(date).toLocaleString();
+    return (
+      visit.logged_in_at ||
+      new Date(visit.visit_time).toLocaleString()
+    );
   };
 
   // =========================
@@ -209,7 +215,7 @@ export default function ClinicDashboard() {
     doc.setFontSize(20);
 
     doc.text(
-      'QNHS SCHOOL CLINIC',
+      "QNHS SCHOOL CLINIC",
       105,
       20,
       { align: 'center' }
@@ -253,12 +259,12 @@ export default function ClinicDashboard() {
   const filteredVisits = visits.filter(
     (visit) => {
 
-      const visitorName =
-        (
-          visit.visitor_type === 'Employee'
-            ? visit.full_name
-            : visit.students?.name
-        )?.toLowerCase() || '';
+      const studentName =
+      (
+        visit.visitor_type === 'Employee'
+          ? visit.full_name
+          : visit.students?.name
+      )?.toLowerCase() || '';
 
       const subject =
         visit.subject_at_time?.toLowerCase() || '';
@@ -267,21 +273,10 @@ export default function ClinicDashboard() {
         searchQuery.toLowerCase();
 
       return (
-        visitorName.includes(query) ||
+        studentName.includes(query) ||
         subject.includes(query)
       );
     }
-  );
-
-  // =========================
-  // SEPARATE TABLES
-  // =========================
-  const studentVisits = filteredVisits.filter(
-    (v) => v.visitor_type !== 'Employee'
-  );
-
-  const employeeVisits = filteredVisits.filter(
-    (v) => v.visitor_type === 'Employee'
   );
 
   // =========================
@@ -356,31 +351,21 @@ export default function ClinicDashboard() {
 
       </div>
 
-      {/* ========================= */}
-      {/* STUDENTS TABLE */}
-      {/* ========================= */}
-      <div className="bg-white rounded-3xl overflow-hidden shadow-xl border mb-10">
-
-        <div className="px-6 py-5 border-b bg-slate-100">
-
-          <h2 className="text-2xl font-black">
-            Students
-          </h2>
-
-        </div>
+      {/* TABLE */}
+      <div className="bg-white rounded-3xl overflow-hidden shadow-xl border">
 
         <table className="w-full">
 
-          <thead className="bg-slate-50">
+          <thead className="bg-slate-100">
 
             <tr>
 
               <th className="text-left px-6 py-5">
-                Student
+                Visitor
               </th>
 
               <th className="text-left px-6 py-5">
-                Login Time & Date
+                Login Time
               </th>
 
               <th className="text-left px-6 py-5">
@@ -409,28 +394,51 @@ export default function ClinicDashboard() {
 
           <tbody>
 
-            {studentVisits.map((v) => (
+            {filteredVisits.map((v) => (
 
               <tr
                 key={v.id}
                 className="border-t hover:bg-slate-50 transition-all"
               >
 
+                {/* VISITOR */}
                 <td className="px-6 py-5">
 
                   <div>
 
-                    <p className="font-black text-slate-800">
+                    <div className="flex items-center gap-2">
 
-                      {v.students?.name}
+                      <p className="font-black text-slate-800">
 
-                    </p>
+                        {
+                          v.visitor_type === 'Employee'
+                            ? v.full_name
+                            : v.students?.name
+                        }
+
+                      </p>
+
+                      {v.visitor_type === 'Employee' && (
+
+                        <span className="bg-blue-100 text-blue-600 text-[10px] px-3 py-1 rounded-full font-black uppercase tracking-wider">
+
+                          Employee
+
+                        </span>
+
+                      )}
+
+                    </div>
 
                     <p className="text-xs text-slate-500 mt-1">
 
-                      {formatGrade(
-                        v.students?.grade_level || ''
-                      )}
+                      {
+                        v.visitor_type === 'Employee'
+                          ? `${v.employee_type || 'Staff'}`
+                          : formatGrade(
+                              v.students?.grade_level || ''
+                            )
+                      }
 
                     </p>
 
@@ -438,6 +446,7 @@ export default function ClinicDashboard() {
 
                 </td>
 
+                {/* LOGIN TIME */}
                 <td className="px-6 py-5">
 
                   <div className="flex items-center gap-2 text-teal-600 font-bold text-sm">
@@ -450,30 +459,46 @@ export default function ClinicDashboard() {
 
                 </td>
 
+                {/* SUBJECT */}
                 <td className="px-6 py-5">
-                  {v.subject_at_time}
+
+                  {
+                    v.visitor_type === 'Employee'
+                      ? 'N/A'
+                      : v.subject_at_time
+                  }
+
                 </td>
 
+                {/* REASON */}
                 <td className="px-6 py-5">
+
                   {v.reason}
+
                 </td>
 
+                {/* VITALS */}
                 <td className="px-6 py-5">
 
                   <div className="space-y-1 text-sm">
 
                     <div>
-                      Temp: {v.temperature || '--'}°C
+                      Temp:
+                      {' '}
+                      {v.temperature || '--'}°C
                     </div>
 
                     <div>
-                      BP: {v.blood_pressure || '--'}
+                      BP:
+                      {' '}
+                      {v.blood_pressure || '--'}
                     </div>
 
                   </div>
 
                 </td>
 
+                {/* STATUS */}
                 <td className="px-6 py-5">
 
                   <span className={`
@@ -491,13 +516,16 @@ export default function ClinicDashboard() {
 
                 </td>
 
+                {/* PDF */}
                 <td className="px-6 py-5">
 
                   <button
                     onClick={() =>
                       generateStudentReport(
                         v.student_id,
-                        v.students?.name || 'Student'
+                        v.visitor_type === 'Employee'
+                          ? v.full_name || 'Employee'
+                          : v.students?.name || 'Student'
                       )
                     }
                     className="bg-slate-900 text-white px-4 py-2 rounded-xl text-sm font-bold flex items-center gap-2"
@@ -508,146 +536,6 @@ export default function ClinicDashboard() {
                     Export
 
                   </button>
-
-                </td>
-
-              </tr>
-
-            ))}
-
-          </tbody>
-
-        </table>
-
-      </div>
-
-      {/* ========================= */}
-      {/* EMPLOYEES TABLE */}
-      {/* ========================= */}
-      <div className="bg-white rounded-3xl overflow-hidden shadow-xl border">
-
-        <div className="px-6 py-5 border-b bg-slate-100">
-
-          <h2 className="text-2xl font-black">
-            Employees
-          </h2>
-
-        </div>
-
-        <table className="w-full">
-
-          <thead className="bg-slate-50">
-
-            <tr>
-
-              <th className="text-left px-6 py-5">
-                Employee Name
-              </th>
-
-              <th className="text-left px-6 py-5">
-                Employee Type
-              </th>
-
-              <th className="text-left px-6 py-5">
-                Login Time & Date
-              </th>
-
-              <th className="text-left px-6 py-5">
-                Reason
-              </th>
-
-              <th className="text-left px-6 py-5">
-                Vitals
-              </th>
-
-              <th className="text-left px-6 py-5">
-                Status
-              </th>
-
-            </tr>
-
-          </thead>
-
-          <tbody>
-
-            {employeeVisits.map((v) => (
-
-              <tr
-                key={v.id}
-                className="border-t hover:bg-slate-50 transition-all"
-              >
-
-                <td className="px-6 py-5 font-black">
-
-                  {v.full_name}
-
-                </td>
-
-                <td className="px-6 py-5">
-
-                  <span className={`
-                    px-3 py-1 rounded-full text-xs font-black uppercase
-                    ${
-                      v.employee_type === 'Teaching'
-                        ? 'bg-green-100 text-green-700'
-                        : 'bg-blue-100 text-blue-700'
-                    }
-                  `}>
-
-                    {v.employee_type || 'Non-Teaching'}
-
-                  </span>
-
-                </td>
-
-                <td className="px-6 py-5">
-
-                  <div className="flex items-center gap-2 text-teal-600 font-bold text-sm">
-
-                    <Clock size={15} />
-
-                    {formatLoginTime(v)}
-
-                  </div>
-
-                </td>
-
-                <td className="px-6 py-5">
-
-                  {v.reason}
-
-                </td>
-
-                <td className="px-6 py-5">
-
-                  <div className="space-y-1 text-sm">
-
-                    <div>
-                      Temp: {v.temperature || '--'}°C
-                    </div>
-
-                    <div>
-                      BP: {v.blood_pressure || '--'}
-                    </div>
-
-                  </div>
-
-                </td>
-
-                <td className="px-6 py-5">
-
-                  <span className={`
-                    px-4 py-2 rounded-xl text-xs font-black
-                    ${
-                      v.status === 'Sent Home'
-                        ? 'bg-red-100 text-red-600'
-                        : 'bg-teal-100 text-teal-600'
-                    }
-                  `}>
-
-                    {v.status}
-
-                  </span>
 
                 </td>
 
