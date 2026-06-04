@@ -40,26 +40,53 @@ export default function ClinicDashboard() {
   const fetchData = useCallback(async () => {
     setLoading(true);
 
-    const { data: visitData } = await supabase
-      .from('visits')
-      .select('*, students(name, grade_level, is_high_risk)')
-      .order('visit_time', { ascending: false });
+    try {
+      const { data: visitData, error: visitError } = await supabase
+        .from('visits')
+        .select('*, students(name, grade_level, is_high_risk)')
+        .order('visit_time', { ascending: false });
 
-    setVisits((visitData as Visit[]) || []);
+      if (visitError) {
+        console.error('Visit error:', visitError.message);
+        setVisits([]);
+      } else {
+        setVisits((visitData as Visit[]) || []);
+      }
 
-    const { count } = await supabase
-      .from('students')
-      .select('*', { count: 'exact', head: true });
+      const { count, error: studentError } = await supabase
+        .from('students')
+        .select('*', { count: 'exact', head: true });
 
-    setTotalStudents(count || 0);
-    setLoading(false);
+      if (studentError) {
+        console.error('Student count error:', studentError.message);
+      }
+
+      setTotalStudents(count || 0);
+    } catch (err) {
+      console.error('Dashboard fetch failed:', err);
+    } finally {
+      setLoading(false);
+    }
   }, []);
 
   useEffect(() => {
     const checkUser = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) router.push('/login');
-      else fetchData();
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+
+        if (error || !session) {
+          console.error('Auth error:', error?.message);
+          router.push('/login');
+          setLoading(false);
+          return;
+        }
+
+        await fetchData();
+      } catch (err) {
+        console.error('Auth check failed:', err);
+        router.push('/login');
+        setLoading(false);
+      }
     };
 
     checkUser();
@@ -94,10 +121,11 @@ export default function ClinicDashboard() {
       counts[subject] = (counts[subject] || 0) + 1;
     });
 
-    return Object.keys(counts).reduce(
-      (a, b) => counts[a] > counts[b] ? a : b,
-      '---'
-    );
+    const subjects = Object.keys(counts);
+
+    if (subjects.length === 0) return '---';
+
+    return subjects.reduce((a, b) => counts[a] > counts[b] ? a : b);
   };
 
   const filteredVisits = visits.filter(v => {
@@ -137,7 +165,6 @@ export default function ClinicDashboard() {
   return (
     <div className="flex min-h-screen bg-[#F8FAFC] text-slate-900 font-sans">
 
-      {/* SIDEBAR */}
       <aside className="w-[320px] bg-[#0B1023] text-white p-8 flex flex-col">
         <div className="flex items-center gap-4 mb-12">
           <div className="bg-[#2CC6A3] p-3 rounded-xl shadow-lg shadow-teal-500/30">
@@ -184,10 +211,7 @@ export default function ClinicDashboard() {
         </button>
       </aside>
 
-      {/* MAIN */}
       <main className="flex-1 p-10">
-
-        {/* TITLE + SEARCH */}
         <div className="flex justify-between items-start mb-10">
           <div>
             <h2 className="text-5xl font-black text-[#0F172A]">
@@ -209,7 +233,6 @@ export default function ClinicDashboard() {
           </div>
         </div>
 
-        {/* STATS */}
         <div className="grid grid-cols-4 gap-7 mb-10">
           <StatCard title="TOTAL STUDENTS" value={totalStudents} icon={<Users />} color="blue" />
           <StatCard title="TOTAL VISITS" value={visits.length} icon={<Activity />} color="teal" />
@@ -217,7 +240,6 @@ export default function ClinicDashboard() {
           <StatCard title="TOP SUBJECT" value={getTopSubject()} icon={<BookOpen />} color="yellow" />
         </div>
 
-        {/* TABLE */}
         <div className="bg-white rounded-[2rem] shadow-xl overflow-hidden">
           <div className="flex justify-between items-center p-8">
             <h3 className="text-2xl font-black">Recent Medical Visits</h3>
@@ -240,57 +262,64 @@ export default function ClinicDashboard() {
             </thead>
 
             <tbody>
-              {filteredVisits.map(v => (
-                <tr key={v.id} className="border-t border-slate-100">
-                  <td className="p-6">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-400">
-                        {v.students?.name?.charAt(0) || <UserRound size={18} />}
-                      </div>
-
-                      <div>
-                        <p className="font-black text-xl">{v.students?.name || 'Unknown'}</p>
-                        <p className="text-xs font-black text-slate-400">
-                          {formatGrade(v.students?.grade_level || '')} • {v.subject_at_time || 'N/A'}
-                        </p>
-                      </div>
-                    </div>
-                  </td>
-
-                  <td className="text-sm font-bold text-slate-500">
-                    🌡 {v.temperature || '--'} <br />
-                    💗 {v.blood_pressure || '--'} BP
-                  </td>
-
-                  <td>
-                    <span className={`px-5 py-2 rounded-full text-xs font-black ${
-                      v.status === 'Sent Home'
-                        ? 'bg-red-100 text-red-600'
-                        : 'bg-teal-50 text-teal-600 border border-teal-100'
-                    }`}>
-                      {v.status || 'WAITING'}
-                    </span>
-                  </td>
-
-                  <td>
-                    <button
-                      onClick={() =>
-                        generateStudentReport(
-                          v.student_id,
-                          v.students?.name || 'student'
-                        )
-                      }
-                      className="text-slate-300 hover:text-[#2CC6A3]"
-                    >
-                      <Download />
-                    </button>
+              {filteredVisits.length === 0 ? (
+                <tr>
+                  <td colSpan={4} className="p-10 text-center font-bold text-slate-400">
+                    No visits found.
                   </td>
                 </tr>
-              ))}
+              ) : (
+                filteredVisits.map(v => (
+                  <tr key={v.id} className="border-t border-slate-100">
+                    <td className="p-6">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-2xl bg-slate-100 flex items-center justify-center font-black text-slate-400">
+                          {v.students?.name?.charAt(0) || <UserRound size={18} />}
+                        </div>
+
+                        <div>
+                          <p className="font-black text-xl">{v.students?.name || 'Unknown'}</p>
+                          <p className="text-xs font-black text-slate-400">
+                            {formatGrade(v.students?.grade_level || '')} • {v.subject_at_time || 'N/A'}
+                          </p>
+                        </div>
+                      </div>
+                    </td>
+
+                    <td className="text-sm font-bold text-slate-500">
+                      🌡 {v.temperature || '--'} <br />
+                      💗 {v.blood_pressure || '--'} BP
+                    </td>
+
+                    <td>
+                      <span className={`px-5 py-2 rounded-full text-xs font-black ${
+                        v.status === 'Sent Home'
+                          ? 'bg-red-100 text-red-600'
+                          : 'bg-teal-50 text-teal-600 border border-teal-100'
+                      }`}>
+                        {v.status || 'WAITING'}
+                      </span>
+                    </td>
+
+                    <td>
+                      <button
+                        onClick={() =>
+                          generateStudentReport(
+                            v.student_id,
+                            v.students?.name || 'student'
+                          )
+                        }
+                        className="text-slate-300 hover:text-[#2CC6A3]"
+                      >
+                        <Download />
+                      </button>
+                    </td>
+                  </tr>
+                ))
+              )}
             </tbody>
           </table>
         </div>
-
       </main>
     </div>
   );
