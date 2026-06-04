@@ -9,43 +9,66 @@ import {
   AlertCircle,
   Loader2,
   Clock3,
-  CalendarDays
+  CalendarDays,
+  UserRound,
+  Briefcase,
+  GraduationCap
 } from 'lucide-react';
 
-export default function StudentKiosk() {
+type VisitorType = 'Student' | 'Employee';
+type Gender = 'Male' | 'Female';
+type EmployeeType = 'Teaching' | 'Non-Teaching';
+
+export default function ClinicKiosk() {
+  const [visitorType, setVisitorType] = useState<VisitorType>('Student');
+
   const [studentId, setStudentId] = useState('');
   const [fullName, setFullName] = useState('');
+  const [gender, setGender] = useState<Gender | ''>('');
   const [gradeLevel, setGradeLevel] = useState('');
   const [strand, setStrand] = useState('');
   const [section, setSection] = useState('');
+
+  const [employeeType, setEmployeeType] = useState<EmployeeType | ''>('');
+
   const [reason, setReason] = useState('');
   const [subject, setSubject] = useState('');
 
-  const [status, setStatus] = useState<
-    'idle' | 'loading' | 'success' | 'error'
-  >('idle');
-
+  const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
-
-  // LIVE DATE & TIME
   const [currentTime, setCurrentTime] = useState(new Date());
 
   useEffect(() => {
-    const timer = setInterval(() => {
-      setCurrentTime(new Date());
-    }, 1000);
-
+    const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
   }, []);
 
-  // AUTO FILL STUDENT INFO
+  const resetFields = () => {
+    setStudentId('');
+    setFullName('');
+    setGender('');
+    setGradeLevel('');
+    setStrand('');
+    setSection('');
+    setEmployeeType('');
+    setReason('');
+    setSubject('');
+  };
+
+  const changeVisitorType = (type: VisitorType) => {
+    setVisitorType(type);
+    resetFields();
+    setStatus('idle');
+    setMessage('');
+  };
+
   const handleIdChange = async (id: string) => {
     setStudentId(id);
 
     if (id.trim().length > 3) {
       const { data } = await supabase
         .from('students')
-        .select('name, grade_level, section, strand')
+        .select('name, grade_level, section, strand, gender')
         .ilike('student_id', id.trim())
         .maybeSingle();
 
@@ -54,6 +77,7 @@ export default function StudentKiosk() {
         setGradeLevel(data.grade_level || '');
         setSection(data.section || '');
         setStrand(data.strand || '');
+        setGender(data.gender || '');
       }
     }
   };
@@ -68,54 +92,59 @@ export default function StudentKiosk() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
     setStatus('loading');
 
     try {
-      // CHECK IF STUDENT EXISTS
-      let { data: student, error: fetchError } = await supabase
-        .from('students')
-        .select('id')
-        .ilike('student_id', studentId.trim())
-        .maybeSingle();
+      let finalStudentUuid: string | null = null;
 
-      if (fetchError) throw fetchError;
-
-      let finalStudentUuid;
-
-      // IF STUDENT EXISTS
-      if (student) {
-        finalStudentUuid = student.id;
-      } else {
-        // CREATE NEW STUDENT
-        const { data: newStudent, error: insertError } = await supabase
+      if (visitorType === 'Student') {
+        const { data: student, error: fetchError } = await supabase
           .from('students')
-          .insert([
-            {
-              student_id: studentId.trim(),
-              name: fullName.trim(),
-              grade_level: gradeLevel,
-              section: section.trim(),
-              strand: strand,
-              is_high_risk: false
-            }
-          ])
           .select('id')
-          .single();
+          .ilike('student_id', studentId.trim())
+          .maybeSingle();
 
-        if (insertError) throw insertError;
+        if (fetchError) throw fetchError;
 
-        finalStudentUuid = newStudent.id;
+        if (student) {
+          finalStudentUuid = student.id;
+        } else {
+          const { data: newStudent, error: insertError } = await supabase
+            .from('students')
+            .insert([
+              {
+                student_id: studentId.trim(),
+                name: fullName.trim(),
+                gender,
+                grade_level: gradeLevel,
+                section: section.trim(),
+                strand: strand || null,
+                is_high_risk: false
+              }
+            ])
+            .select('id')
+            .single();
+
+          if (insertError) throw insertError;
+
+          finalStudentUuid = newStudent.id;
+        }
       }
 
-      // INSERT VISIT
       const { error: visitError } = await supabase
         .from('visits')
         .insert([
           {
-            student_id: finalStudentUuid,
+            student_id: visitorType === 'Student' ? finalStudentUuid : null,
+            visitor_type: visitorType,
+            full_name: fullName.trim(),
+            employee_type: visitorType === 'Employee' ? employeeType : null,
+            gender,
             reason: reason.trim(),
-            subject_at_time: subject.trim(),
+            subject_at_time:
+              visitorType === 'Student'
+                ? subject.trim()
+                : employeeType || 'Employee',
             status: 'Waiting',
             visit_time: new Date().toISOString()
           }
@@ -124,40 +153,24 @@ export default function StudentKiosk() {
       if (visitError) throw visitError;
 
       setStatus('success');
-
-      setMessage(
-        `Done! Please wait for the nurse, ${
-          fullName.trim().split(' ')[0]
-        }.`
-      );
+      setMessage(`Done! Please wait for the nurse, ${fullName.trim().split(' ')[0]}.`);
 
       setTimeout(() => {
-        setStudentId('');
-        setFullName('');
-        setGradeLevel('');
-        setStrand('');
-        setSection('');
-        setReason('');
-        setSubject('');
+        resetFields();
         setStatus('idle');
       }, 4000);
     } catch (err: any) {
       console.error('KIOSK ERROR:', err);
-
       setStatus('error');
-
-      setMessage(
-        err.message || 'System error. Please notify clinic staff.'
-      );
+      setMessage(err.message || 'System error. Please notify clinic staff.');
     }
   };
 
   return (
     <div className="min-h-screen bg-[#0F172A] text-white flex flex-col items-center justify-center p-4 font-sans tracking-tight">
-      <div className="max-w-2xl w-full bg-[#1E293B] p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-700/50">
+      <div className="max-w-3xl w-full bg-[#1E293B] p-8 md:p-12 rounded-[3rem] shadow-2xl border border-slate-700/50">
 
         <div className="flex flex-col items-center mb-8 text-center">
-
           <div className="bg-[#14B8A6] p-4 rounded-2xl mb-4 shadow-lg shadow-teal-500/20">
             <Activity size={40} className="text-white" />
           </div>
@@ -167,12 +180,10 @@ export default function StudentKiosk() {
           </h1>
 
           <p className="text-slate-400 font-bold mt-2 text-sm uppercase tracking-widest">
-            Student Intake Kiosk
+            Clinic Intake Kiosk
           </p>
 
-          {/* DATE & TIME */}
-          <div className="mt-6 grid grid-cols-2 gap-4 w-full">
-
+          <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4 w-full">
             <div className="bg-slate-800/60 border border-slate-700 rounded-2xl p-4 flex items-center gap-3">
               <CalendarDays className="text-teal-400" size={24} />
 
@@ -209,16 +220,12 @@ export default function StudentKiosk() {
                 </p>
               </div>
             </div>
-
           </div>
         </div>
 
         {status === 'success' ? (
           <div className="text-center py-20">
-            <CheckCircle2
-              size={100}
-              className="text-[#14B8A6] mx-auto mb-6"
-            />
+            <CheckCircle2 size={100} className="text-[#14B8A6] mx-auto mb-6" />
 
             <p className="text-3xl font-black leading-tight">
               {message}
@@ -227,19 +234,49 @@ export default function StudentKiosk() {
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
 
+            <div className="grid grid-cols-2 gap-4">
+              <button
+                type="button"
+                onClick={() => changeVisitorType('Student')}
+                className={`p-5 rounded-2xl border font-black flex items-center justify-center gap-3 ${
+                  visitorType === 'Student'
+                    ? 'bg-[#14B8A6] border-[#14B8A6] text-white'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                <GraduationCap />
+                Student
+              </button>
+
+              <button
+                type="button"
+                onClick={() => changeVisitorType('Employee')}
+                className={`p-5 rounded-2xl border font-black flex items-center justify-center gap-3 ${
+                  visitorType === 'Employee'
+                    ? 'bg-[#14B8A6] border-[#14B8A6] text-white'
+                    : 'bg-slate-800 border-slate-700 text-slate-400'
+                }`}
+              >
+                <Briefcase />
+                Employee
+              </button>
+            </div>
+
             <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
 
-              <div>
-                <label className="kiosk-label">Student ID</label>
+              {visitorType === 'Student' && (
+                <div>
+                  <label className="kiosk-label">Student ID</label>
 
-                <input
-                  required
-                  className="kiosk-input"
-                  placeholder="2024-0001"
-                  value={studentId}
-                  onChange={(e) => handleIdChange(e.target.value)}
-                />
-              </div>
+                  <input
+                    required
+                    className="kiosk-input"
+                    placeholder="2024-0001"
+                    value={studentId}
+                    onChange={(e) => handleIdChange(e.target.value)}
+                  />
+                </div>
+              )}
 
               <div>
                 <label className="kiosk-label">Full Name</label>
@@ -247,87 +284,123 @@ export default function StudentKiosk() {
                 <input
                   required
                   className="kiosk-input"
-                  placeholder="Juan Dela Cruz"
+                  placeholder={visitorType === 'Student' ? 'Juan Dela Cruz' : 'Maria Santos'}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
                 />
               </div>
 
               <div>
-                <label className="kiosk-label">Grade Level</label>
+                <label className="kiosk-label">Gender</label>
 
                 <select
                   required
                   className="kiosk-input"
-                  value={gradeLevel}
-                  onChange={(e) => handleGradeChange(e.target.value)}
+                  value={gender}
+                  onChange={(e) => setGender(e.target.value as Gender)}
                 >
-                  <option value="">Select Grade</option>
-
-                  {[7, 8, 9, 10, 11, 12].map((g) => (
-                    <option key={g} value={g.toString()}>
-                      Grade {g}
-                    </option>
-                  ))}
+                  <option value="">Select Gender</option>
+                  <option value="Male">Male</option>
+                  <option value="Female">Female</option>
                 </select>
               </div>
 
-              {(gradeLevel === '11' || gradeLevel === '12') && (
+              {visitorType === 'Student' && (
+                <>
+                  <div>
+                    <label className="kiosk-label">Grade Level</label>
+
+                    <select
+                      required
+                      className="kiosk-input"
+                      value={gradeLevel}
+                      onChange={(e) => handleGradeChange(e.target.value)}
+                    >
+                      <option value="">Select Grade</option>
+
+                      {[7, 8, 9, 10, 11, 12].map((g) => (
+                        <option key={g} value={g.toString()}>
+                          Grade {g}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {(gradeLevel === '11' || gradeLevel === '12') && (
+                    <div>
+                      <label className="kiosk-label">Strand</label>
+
+                      <select
+                        required
+                        className="kiosk-input"
+                        value={strand}
+                        onChange={(e) => setStrand(e.target.value)}
+                      >
+                        <option value="">Select Strand</option>
+                        <option value="STEM">STEM</option>
+                        <option value="ABM">ABM</option>
+                        <option value="HUMSS">HUMSS</option>
+                        <option value="TVL-ICT">TVL-ICT</option>
+                        <option value="TVL-HE">TVL-HE</option>
+                      </select>
+                    </div>
+                  )}
+
+                  <div>
+                    <label className="kiosk-label">Section</label>
+
+                    <input
+                      required
+                      className="kiosk-input"
+                      placeholder="Newton"
+                      value={section}
+                      onChange={(e) => setSection(e.target.value)}
+                    />
+                  </div>
+
+                  <div>
+                    <label className="kiosk-label">Current Subject</label>
+
+                    <input
+                      required
+                      className="kiosk-input"
+                      placeholder="Mathematics"
+                      value={subject}
+                      onChange={(e) => setSubject(e.target.value)}
+                    />
+                  </div>
+                </>
+              )}
+
+              {visitorType === 'Employee' && (
                 <div>
-                  <label className="kiosk-label">Strand</label>
+                  <label className="kiosk-label">Employee Type</label>
 
                   <select
                     required
                     className="kiosk-input"
-                    value={strand}
-                    onChange={(e) => setStrand(e.target.value)}
+                    value={employeeType}
+                    onChange={(e) => setEmployeeType(e.target.value as EmployeeType)}
                   >
-                    <option value="">Select Strand</option>
-                    <option value="STEM">STEM</option>
-                    <option value="ABM">ABM</option>
-                    <option value="HUMSS">HUMSS</option>
-                    <option value="TVL-ICT">TVL-ICT</option>
-                    <option value="TVL-HE">TVL-HE</option>
+                    <option value="">Select Employee Type</option>
+                    <option value="Teaching">Teaching Employee</option>
+                    <option value="Non-Teaching">Non-Teaching Employee</option>
                   </select>
                 </div>
               )}
 
-              <div>
-                <label className="kiosk-label">Section</label>
-
-                <input
-                  required
-                  className="kiosk-input"
-                  placeholder="Newton"
-                  value={section}
-                  onChange={(e) => setSection(e.target.value)}
-                />
-              </div>
-
-              <div>
-                <label className="kiosk-label">
-                  Current Subject
-                </label>
-
-                <input
-                  required
-                  className="kiosk-input"
-                  placeholder="Mathematics"
-                  value={subject}
-                  onChange={(e) => setSubject(e.target.value)}
-                />
-              </div>
-
               <div className="md:col-span-2">
-                <label className="kiosk-label">
-                  Reason for Visit
-                </label>
+                <label className="kiosk-label">Reason for Visit</label>
 
                 <textarea
                   required
-                  rows={2}
+                  rows={3}
                   className="kiosk-input resize-none"
-                  placeholder="How are you feeling?"
+                  placeholder={
+                    visitorType === 'Student'
+                      ? 'How are you feeling?'
+                      : 'Reason for clinic visit'
+                  }
                   value={reason}
                   onChange={(e) => setReason(e.target.value)}
                 />
@@ -348,10 +421,12 @@ export default function StudentKiosk() {
               {status === 'loading' ? (
                 <Loader2 className="animate-spin" />
               ) : (
-                'Confirm Log-in'
+                <>
+                  <UserRound />
+                  Confirm Log-in
+                </>
               )}
             </button>
-
           </form>
         )}
       </div>

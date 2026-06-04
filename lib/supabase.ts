@@ -1,14 +1,20 @@
-import { createClient } from '@supabase/supabase-js'
+import { createClient } from '@supabase/supabase-js';
 
-const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL
-const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL;
+const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
-// This will print to your browser console
-console.log("DEBUG: Supabase URL is:", supabaseUrl);
-
-if (!supabaseUrl || !supabaseAnonKey) {
-  // If you see this message in the console, the file is in the wrong place!
-  console.error("CRITICAL ERROR: Supabase Keys are missing from .env.local");
+if (!supabaseUrl) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_URL');
 }
 
-export const supabase = createClient(supabaseUrl || 'https://placeholder.co', supabaseAnonKey || 'placeholder')
+if (!supabaseAnonKey) {
+  throw new Error('Missing NEXT_PUBLIC_SUPABASE_ANON_KEY');
+}
+
+export const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+  auth: {
+    persistSession: true,
+    autoRefreshToken: true,
+    detectSessionInUrl: true,
+  },
+});
