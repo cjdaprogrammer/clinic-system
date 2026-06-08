@@ -42,6 +42,12 @@ export default function ClinicKiosk() {
   const [message, setMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
 
+  const inputClass =
+    'w-full h-[52px] rounded-2xl bg-slate-800/70 border border-slate-700 px-4 text-white placeholder:text-slate-500 font-bold outline-none focus:ring-2 focus:ring-[#14B8A6] focus:border-[#14B8A6] transition-all';
+
+  const labelClass =
+    'block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-2 ml-1';
+
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 1000);
     return () => clearInterval(timer);
@@ -315,6 +321,7 @@ export default function ClinicKiosk() {
 
             <div className="mt-6 bg-slate-800 border border-slate-700 rounded-2xl p-5 flex items-center justify-center gap-3">
               <Ticket className="text-teal-400" />
+
               <p className="text-2xl font-black text-teal-400">
                 {ticketNumber}
               </p>
@@ -355,11 +362,11 @@ export default function ClinicKiosk() {
 
               {visitorType === 'Student' && (
                 <div>
-                  <label className="kiosk-label">Student ID</label>
+                  <label className={labelClass}>Student ID</label>
 
                   <input
                     required
-                    className="kiosk-input"
+                    className={inputClass}
                     placeholder="2024-0001"
                     value={studentId}
                     onChange={(e) => handleIdChange(e.target.value)}
@@ -368,11 +375,11 @@ export default function ClinicKiosk() {
               )}
 
               <div>
-                <label className="kiosk-label">Full Name</label>
+                <label className={labelClass}>Full Name</label>
 
                 <input
                   required
-                  className="kiosk-input"
+                  className={inputClass}
                   placeholder={visitorType === 'Student' ? 'Juan Dela Cruz' : 'Maria Santos'}
                   value={fullName}
                   onChange={(e) => setFullName(e.target.value)}
@@ -380,15 +387,18 @@ export default function ClinicKiosk() {
               </div>
 
               <div>
-                <label className="kiosk-label">Email Address</label>
+                <label className={labelClass}>Email Address</label>
 
                 <div className="relative">
-                  <Mail className="absolute left-4 top-3.5 text-slate-400" size={18} />
+                  <Mail
+                    className="absolute left-4 top-1/2 -translate-y-1/2 text-slate-400 pointer-events-none"
+                    size={18}
+                  />
 
                   <input
                     required
                     type="email"
-                    className="kiosk-input pl-11"
+                    className={`${inputClass} pl-12`}
                     placeholder="example@gmail.com"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
@@ -397,11 +407,11 @@ export default function ClinicKiosk() {
               </div>
 
               <div>
-                <label className="kiosk-label">Gender</label>
+                <label className={labelClass}>Gender</label>
 
                 <select
                   required
-                  className="kiosk-input"
+                  className={inputClass}
                   value={gender}
                   onChange={(e) => setGender(e.target.value as Gender)}
                 >
@@ -414,11 +424,11 @@ export default function ClinicKiosk() {
               {visitorType === 'Student' && (
                 <>
                   <div>
-                    <label className="kiosk-label">Grade Level</label>
+                    <label className={labelClass}>Grade Level</label>
 
                     <select
                       required
-                      className="kiosk-input"
+                      className={inputClass}
                       value={gradeLevel}
                       onChange={(e) => handleGradeChange(e.target.value)}
                     >
@@ -434,11 +444,11 @@ export default function ClinicKiosk() {
 
                   {(gradeLevel === '11' || gradeLevel === '12') && (
                     <div>
-                      <label className="kiosk-label">Strand</label>
+                      <label className={labelClass}>Strand</label>
 
                       <select
                         required
-                        className="kiosk-input"
+                        className={inputClass}
                         value={strand}
                         onChange={(e) => setStrand(e.target.value)}
                       >
@@ -454,11 +464,11 @@ export default function ClinicKiosk() {
                   )}
 
                   <div>
-                    <label className="kiosk-label">Section</label>
+                    <label className={labelClass}>Section</label>
 
                     <input
                       required
-                      className="kiosk-input"
+                      className={inputClass}
                       placeholder="Newton"
                       value={section}
                       onChange={(e) => setSection(e.target.value)}
@@ -466,11 +476,11 @@ export default function ClinicKiosk() {
                   </div>
 
                   <div>
-                    <label className="kiosk-label">Current Subject</label>
+                    <label className={labelClass}>Current Subject</label>
 
                     <input
                       required
-                      className="kiosk-input"
+                      className={inputClass}
                       placeholder="Mathematics"
                       value={subject}
                       onChange={(e) => setSubject(e.target.value)}
@@ -481,11 +491,11 @@ export default function ClinicKiosk() {
 
               {visitorType === 'Employee' && (
                 <div>
-                  <label className="kiosk-label">Employee Type</label>
+                  <label className={labelClass}>Employee Type</label>
 
                   <select
                     required
-                    className="kiosk-input"
+                    className={inputClass}
                     value={employeeType}
                     onChange={(e) => setEmployeeType(e.target.value as EmployeeType)}
                   >
@@ -497,12 +507,12 @@ export default function ClinicKiosk() {
               )}
 
               <div className="md:col-span-2">
-                <label className="kiosk-label">Reason for Visit</label>
+                <label className={labelClass}>Reason for Visit</label>
 
                 <textarea
                   required
                   rows={3}
-                  className="kiosk-input resize-none"
+                  className={`${inputClass} h-auto min-h-[110px] resize-none py-4`}
                   placeholder={
                     visitorType === 'Student'
                       ? 'How are you feeling?'
