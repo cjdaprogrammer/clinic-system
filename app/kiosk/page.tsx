@@ -12,7 +12,9 @@ import {
   CalendarDays,
   UserRound,
   Briefcase,
-  GraduationCap
+  GraduationCap,
+  Mail,
+  Ticket
 } from 'lucide-react';
 
 type VisitorType = 'Student' | 'Employee';
@@ -24,6 +26,7 @@ export default function ClinicKiosk() {
 
   const [studentId, setStudentId] = useState('');
   const [fullName, setFullName] = useState('');
+  const [email, setEmail] = useState('');
   const [gender, setGender] = useState<Gender | ''>('');
   const [gradeLevel, setGradeLevel] = useState('');
   const [strand, setStrand] = useState('');
@@ -34,6 +37,7 @@ export default function ClinicKiosk() {
   const [reason, setReason] = useState('');
   const [subject, setSubject] = useState('');
 
+  const [ticketNumber, setTicketNumber] = useState('');
   const [status, setStatus] = useState<'idle' | 'loading' | 'success' | 'error'>('idle');
   const [message, setMessage] = useState('');
   const [currentTime, setCurrentTime] = useState(new Date());
@@ -43,9 +47,20 @@ export default function ClinicKiosk() {
     return () => clearInterval(timer);
   }, []);
 
+  const generateTicketNumber = () => {
+    const date = new Date();
+    const y = date.getFullYear();
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const d = String(date.getDate()).padStart(2, '0');
+    const random = Math.floor(100000 + Math.random() * 900000);
+
+    return `QNHS-${y}${m}${d}-${random}`;
+  };
+
   const resetFields = () => {
     setStudentId('');
     setFullName('');
+    setEmail('');
     setGender('');
     setGradeLevel('');
     setStrand('');
@@ -53,6 +68,7 @@ export default function ClinicKiosk() {
     setEmployeeType('');
     setReason('');
     setSubject('');
+    setTicketNumber('');
   };
 
   const changeVisitorType = (type: VisitorType) => {
@@ -68,7 +84,7 @@ export default function ClinicKiosk() {
     if (id.trim().length > 3) {
       const { data } = await supabase
         .from('students')
-        .select('name, grade_level, section, strand, gender')
+        .select('name, grade_level, section, strand, gender, email')
         .ilike('student_id', id.trim())
         .maybeSingle();
 
@@ -78,6 +94,7 @@ export default function ClinicKiosk() {
         setSection(data.section || '');
         setStrand(data.strand || '');
         setGender(data.gender || '');
+        setEmail(data.email || '');
       }
     }
   };
@@ -90,9 +107,46 @@ export default function ClinicKiosk() {
     }
   };
 
+  const sendEmailNotification = async ({
+    email,
+    fullName,
+    ticketNumber,
+    visitorType,
+    reason,
+    visitTime
+  }: {
+    email: string;
+    fullName: string;
+    ticketNumber: string;
+    visitorType: string;
+    reason: string;
+    visitTime: string;
+  }) => {
+    const res = await fetch('/api/send-visit-email', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        email,
+        fullName,
+        ticketNumber,
+        visitorType,
+        reason,
+        visitTime
+      })
+    });
+
+    if (!res.ok) {
+      const result = await res.json();
+      throw new Error(result.error || 'Email notification failed.');
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setStatus('loading');
+
+    const newTicketNumber = generateTicketNumber();
+    const visitTime = new Date().toISOString();
 
     try {
       let finalStudentUuid: string | null = null;
@@ -108,6 +162,18 @@ export default function ClinicKiosk() {
 
         if (student) {
           finalStudentUuid = student.id;
+
+          await supabase
+            .from('students')
+            .update({
+              name: fullName.trim(),
+              email: email.trim(),
+              gender,
+              grade_level: gradeLevel,
+              section: section.trim(),
+              strand: strand || null
+            })
+            .eq('id', student.id);
         } else {
           const { data: newStudent, error: insertError } = await supabase
             .from('students')
@@ -115,6 +181,7 @@ export default function ClinicKiosk() {
               {
                 student_id: studentId.trim(),
                 name: fullName.trim(),
+                email: email.trim(),
                 gender,
                 grade_level: gradeLevel,
                 section: section.trim(),
@@ -138,27 +205,42 @@ export default function ClinicKiosk() {
             student_id: visitorType === 'Student' ? finalStudentUuid : null,
             visitor_type: visitorType,
             full_name: fullName.trim(),
+            email: email.trim(),
             employee_type: visitorType === 'Employee' ? employeeType : null,
             gender,
+            ticket_number: newTicketNumber,
             reason: reason.trim(),
             subject_at_time:
               visitorType === 'Student'
                 ? subject.trim()
                 : employeeType || 'Employee',
             status: 'Waiting',
-            visit_time: new Date().toISOString()
+            visit_time: visitTime
           }
         ]);
 
       if (visitError) throw visitError;
 
+      await sendEmailNotification({
+        email: email.trim(),
+        fullName: fullName.trim(),
+        ticketNumber: newTicketNumber,
+        visitorType,
+        reason: reason.trim(),
+        visitTime: new Date(visitTime).toLocaleString('en-PH')
+      });
+
+      setTicketNumber(newTicketNumber);
       setStatus('success');
-      setMessage(`Done! Please wait for the nurse, ${fullName.trim().split(' ')[0]}.`);
+
+      setMessage(
+        `Done! Your clinic number is ${newTicketNumber}. A confirmation was sent to ${email}.`
+      );
 
       setTimeout(() => {
         resetFields();
         setStatus('idle');
-      }, 4000);
+      }, 6000);
     } catch (err: any) {
       console.error('KIOSK ERROR:', err);
       setStatus('error');
@@ -230,6 +312,13 @@ export default function ClinicKiosk() {
             <p className="text-3xl font-black leading-tight">
               {message}
             </p>
+
+            <div className="mt-6 bg-slate-800 border border-slate-700 rounded-2xl p-5 flex items-center justify-center gap-3">
+              <Ticket className="text-teal-400" />
+              <p className="text-2xl font-black text-teal-400">
+                {ticketNumber}
+              </p>
+            </div>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
@@ -291,6 +380,23 @@ export default function ClinicKiosk() {
               </div>
 
               <div>
+                <label className="kiosk-label">Email Address</label>
+
+                <div className="relative">
+                  <Mail className="absolute left-4 top-3.5 text-slate-400" size={18} />
+
+                  <input
+                    required
+                    type="email"
+                    className="kiosk-input pl-11"
+                    placeholder="example@gmail.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                  />
+                </div>
+              </div>
+
+              <div>
                 <label className="kiosk-label">Gender</label>
 
                 <select
@@ -340,6 +446,7 @@ export default function ClinicKiosk() {
                         <option value="STEM">STEM</option>
                         <option value="ABM">ABM</option>
                         <option value="HUMSS">HUMSS</option>
+                        <option value="GAS">GAS</option>
                         <option value="TVL-ICT">TVL-ICT</option>
                         <option value="TVL-HE">TVL-HE</option>
                       </select>
