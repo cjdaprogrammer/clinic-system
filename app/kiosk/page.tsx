@@ -88,11 +88,16 @@ export default function ClinicKiosk() {
     setStudentId(id);
 
     if (id.trim().length > 3) {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from('students')
         .select('name, grade_level, section, strand, gender, email')
         .ilike('student_id', id.trim())
         .maybeSingle();
+
+      if (error) {
+        console.warn('Student lookup failed:', error.message);
+        return;
+      }
 
       if (data) {
         setFullName(data.name || '');
@@ -142,13 +147,45 @@ export default function ClinicKiosk() {
     });
 
     if (!res.ok) {
-      const result = await res.json();
-      throw new Error(result.error || 'Email notification failed.');
+      const result = await res.json().catch(() => null);
+      throw new Error(result?.error || 'Email notification failed.');
     }
+  };
+
+  const validateForm = () => {
+    if (!fullName.trim()) return 'Please enter full name.';
+    if (!email.trim()) return 'Please enter email address.';
+    if (!gender) return 'Please select gender.';
+    if (!reason.trim()) return 'Please enter reason for visit.';
+
+    if (visitorType === 'Student') {
+      if (!studentId.trim()) return 'Please enter student ID.';
+      if (!gradeLevel) return 'Please select grade level.';
+      if (!section.trim()) return 'Please enter section.';
+      if ((gradeLevel === '11' || gradeLevel === '12') && !strand) {
+        return 'Please select strand.';
+      }
+      if (!subject.trim()) return 'Please enter current subject.';
+    }
+
+    if (visitorType === 'Employee') {
+      if (!employeeType) return 'Please select employee type.';
+    }
+
+    return '';
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const formError = validateForm();
+
+    if (formError) {
+      setStatus('error');
+      setMessage(formError);
+      return;
+    }
+
     setStatus('loading');
 
     const newTicketNumber = generateTicketNumber();
@@ -169,7 +206,7 @@ export default function ClinicKiosk() {
         if (student) {
           finalStudentUuid = student.id;
 
-          await supabase
+          const { error: updateError } = await supabase
             .from('students')
             .update({
               name: fullName.trim(),
@@ -180,6 +217,8 @@ export default function ClinicKiosk() {
               strand: strand || null
             })
             .eq('id', student.id);
+
+          if (updateError) throw updateError;
         } else {
           const { data: newStudent, error: insertError } = await supabase
             .from('students')
@@ -227,26 +266,35 @@ export default function ClinicKiosk() {
 
       if (visitError) throw visitError;
 
-      await sendEmailNotification({
-        email: email.trim(),
-        fullName: fullName.trim(),
-        ticketNumber: newTicketNumber,
-        visitorType,
-        reason: reason.trim(),
-        visitTime: new Date(visitTime).toLocaleString('en-PH')
-      });
+      let emailSent = true;
+
+      try {
+        await sendEmailNotification({
+          email: email.trim(),
+          fullName: fullName.trim(),
+          ticketNumber: newTicketNumber,
+          visitorType,
+          reason: reason.trim(),
+          visitTime: new Date(visitTime).toLocaleString('en-PH')
+        });
+      } catch (emailError: any) {
+        emailSent = false;
+        console.warn('Email failed but visit was saved:', emailError.message);
+      }
 
       setTicketNumber(newTicketNumber);
       setStatus('success');
 
       setMessage(
-        `Done! Your clinic number is ${newTicketNumber}. A confirmation was sent to ${email}.`
+        emailSent
+          ? `Done! Your clinic number is ${newTicketNumber}. A confirmation was sent to ${email}.`
+          : `Done! Your clinic number is ${newTicketNumber}. Visit was saved, but email was not sent. Please notify clinic staff.`
       );
 
       setTimeout(() => {
         resetFields();
         setStatus('idle');
-      }, 6000);
+      }, 7000);
     } catch (err: any) {
       console.error('KIOSK ERROR:', err);
       setStatus('error');
