@@ -3,8 +3,6 @@ import nodemailer from 'nodemailer';
 
 export async function POST(req: Request) {
   try {
-    const body = await req.json();
-
     const {
       email,
       fullName,
@@ -12,12 +10,22 @@ export async function POST(req: Request) {
       visitorType,
       reason,
       visitTime
-    } = body;
+    } = await req.json();
 
     if (!email || !fullName || !ticketNumber) {
       return NextResponse.json(
         { error: 'Missing required email fields.' },
         { status: 400 }
+      );
+    }
+
+    if (!process.env.GMAIL_USER || !process.env.GMAIL_APP_PASSWORD) {
+      return NextResponse.json(
+        {
+          error:
+            'Gmail credentials are missing. Please add GMAIL_USER and GMAIL_APP_PASSWORD in Vercel Environment Variables.'
+        },
+        { status: 500 }
       );
     }
 
@@ -37,7 +45,6 @@ export async function POST(req: Request) {
         <div style="font-family: Arial, sans-serif; line-height: 1.6;">
           <h2>QNHS Clinic Visit Confirmation</h2>
           <p>Hello <b>${fullName}</b>,</p>
-
           <p>Your clinic visit has been recorded.</p>
 
           <p><b>Ticket Number:</b> ${ticketNumber}</p>
@@ -58,6 +65,8 @@ export async function POST(req: Request) {
 
     return NextResponse.json({ success: true });
   } catch (error: any) {
+    console.error('EMAIL ERROR:', error);
+
     return NextResponse.json(
       { error: error.message || 'Email sending failed.' },
       { status: 500 }
